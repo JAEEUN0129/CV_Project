@@ -56,18 +56,27 @@ python -m venv .venv_hair
 .\.venv_hair\Scripts\python.exe -m pip install -r .\jaeeun\requirements-hair.txt
 ```
 
-### 그래픽카드가 없는 환경에서만 필요한 수정
+### 받은 모델 코드 수정 (필수)
 
-HairFastGAN은 NVIDIA 그래픽카드를 전제로 작성되어 있어, 없는 환경에서는 세 군데를 고쳐야
-합니다. 계산 로직은 건드리지 않고 장치 관련 부분만 바꿉니다.
+HairFastGAN은 NVIDIA 그래픽카드를 전제로 작성되어 있어 그대로는 이 프로젝트에서 실행되지
+않습니다. 수정은 스크립트로 자동 적용합니다.
 
-1. `models/**/op/fused_act.py`와 `upfirdn2d.py` (각 3개) — 파일 맨 위의 `load(...)` 호출을
-   `try` / `except`로 감싸 실패해도 넘어가게 합니다. 함수 안쪽에는 이미 CPU 경로가 있습니다.
-2. 소스 전체의 `device='cuda'`를 `device=('cuda' if torch.cuda.is_available() else 'cpu')`로
-   바꿉니다.
-3. `utils/bicubic.py`의 `__init__` 기본값 `cuda=True`를 실제 장치에 따르도록 바꾸고,
-   `utils/image_utils.py`의 `hair_from_mask`에서 `F.interpolate` 인자를 `mask.float()`로
-   바꿉니다. CPU에는 정수 자료형용 최근접 보간 커널이 없습니다.
+```powershell
+.\.venv\Scripts\python.exe .\jaeeun\patch_hairfastgan.py
+```
+
+고치는 곳은 네 가지이며, 계산 로직은 건드리지 않고 장치 관련 부분만 바꿉니다. 여러 번
+실행해도 안전합니다.
+
+| 대상 | 내용 |
+|---|---|
+| StyleGAN2 연산 (`fused_act`, `upfirdn2d`) | CUDA 커널 컴파일 실패를 허용하고, 실패 시 순수 PyTorch 경로를 쓰도록 분기 조건 수정 |
+| 소스 전체의 `device='cuda'` | 실제 사용 가능한 장치를 따르도록 변경 |
+| `utils/bicubic.py` | 축소 필터의 장치 기본값을 자동 감지로 변경 |
+| `utils/image_utils.py` | 마스크 보간 시 자료형 변환 (CPU에 정수형 최근접 보간 커널이 없음) |
+
+`external/`은 저장소에 포함되지 않으므로, **모델 코드를 새로 받을 때마다 이 스크립트를 다시
+실행해야 합니다.**
 
 `.venv_hair`가 없어도 웹 화면은 실행되며, 헤어스타일 기능만 "준비되지 않음"으로 표시됩니다.
 

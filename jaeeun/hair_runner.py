@@ -18,6 +18,19 @@ import torch
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 
 
+def choose_device() -> str:
+    """Pick the device and, on a CPU-only host, adapt the model package to it.
+
+    The redirection below is applied only when there is no GPU. Applying it unconditionally
+    would quietly pin a GPU host to the CPU, which is the difference between seconds and
+    minutes per frame.
+    """
+    if torch.cuda.is_available():
+        return "cuda"
+    install_cpu_compatibility()
+    return "cpu"
+
+
 def install_cpu_compatibility() -> None:
     """Undo HairFastGAN's assumption that a CUDA device is always present.
 
@@ -53,17 +66,17 @@ def install_cpu_compatibility() -> None:
     torch.Tensor.to = redirect_to_cpu(torch.Tensor.to)
 
 
-def build_model(repo: Path, weights: Path):
+def build_model(repo: Path, weights: Path, device: str):
     sys.path.insert(0, str(repo))
     from hair_swap import HairFast, get_parser
     from models.sean_codes.models.pix2pix_model import SEAN_OPT
 
-    # The blending network defaults to GPU 0 and asserts CUDA is present; declaring no
-    # GPUs is the switch this code already provides for CPU runs.
-    SEAN_OPT.gpu_ids = []
+    # The blending network asserts CUDA is present whenever any GPU id is listed, so an
+    # empty list is the switch this code already provides for CPU runs.
+    SEAN_OPT.gpu_ids = [0] if device == "cuda" else []
 
     args = get_parser().parse_args([])
-    args.device = "cpu"
+    args.device = device
     args.ckpt = str(weights / "StyleGAN/ffhq.pt")
     args.rotate_checkpoint = str(weights / "Rotate/rotate_best.pth")
     args.blending_checkpoint = str(weights / "Blending/checkpoint.pth")
@@ -86,8 +99,9 @@ def main() -> None:
         print("ERROR no input images found", flush=True)
         sys.exit(1)
 
-    install_cpu_compatibility()
-    model = build_model(options.repo.resolve(), options.weights.resolve())
+    device = choose_device()
+    print(f"DEVICE {device}", flush=True)
+    model = build_model(options.repo.resolve(), options.weights.resolve(), device)
     options.output.mkdir(parents=True, exist_ok=True)
     print(f"TOTAL {len(faces)}", flush=True)
 
