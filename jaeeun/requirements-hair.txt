@@ -1,0 +1,28 @@
+# HairFastGAN 격리 환경 전용. 주 환경(requirements.txt)과 같이 설치하면 안 됩니다.
+# torch와 torchvision은 CPU 전용 색인에서 따로 설치합니다. SETUP.md 참고.
+
+numpy>=1.26,<2
+pillow>=10,<12
+opencv-python>=4.10,<5
+scipy>=1.11,<2
+scikit-image>=0.22,<1
+scikit-learn>=1.3,<2
+pandas>=2,<3
+matplotlib>=3.7,<4
+imageio>=2.34,<3
+torchmetrics>=1,<2
+
+# 얼굴 검출 및 68점 정렬. dlib-bin은 컴파일 없이 설치되는 배포판입니다.
+dlib-bin>=19.24
+face_alignment>=1.4,<2
+
+# 모델 코드가 직접 가져다 쓰는 것들
+pyyaml>=6,<7
+addict>=2.4,<3
+dill>=0.3,<1
+gdown>=5,<6
+requests>=2.31,<3
+ftfy>=6,<7
+regex>=2023.12
+tqdm>=4.66,<5
+clip @ git+https://github.com/openai/CLIP.git
