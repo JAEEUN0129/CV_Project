@@ -26,8 +26,11 @@
 
 ## 시작하기
 
-설치와 실행은 [jaeeun/SETUP.md](jaeeun/SETUP.md)를 따르세요. 환경이 두 개이며, 헤어스타일
-환경은 없어도 나머지 기능은 정상 동작합니다.
+내 컴퓨터에서의 설치와 실행은 [jaeeun/SETUP.md](jaeeun/SETUP.md)를 따르세요. 환경이 두 개이며,
+헤어스타일 환경은 없어도 나머지 기능은 정상 동작합니다.
+
+헤어스타일 변경을 GPU 서버에서 돌리려면 [vessl/README.md](vessl/README.md)를 참고하세요.
+같은 작업이 10배 이상 빨라집니다.
 
 계획과 진행 상황은 [jaeeun/PROJECT_PLAN.md](jaeeun/PROJECT_PLAN.md)에 있습니다.
 
