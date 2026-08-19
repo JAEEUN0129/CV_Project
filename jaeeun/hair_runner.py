@@ -111,7 +111,23 @@ def hair_mask_of(image: "torch.Tensor", repo: Path) -> "torch.Tensor":
 def main() -> None:
     parser = argparse.ArgumentParser(description="Transfer one hairstyle onto every face image in a folder.")
     parser.add_argument("--faces", type=Path, required=True, help="Directory of face images to restyle")
-    parser.add_argument("--reference", type=Path, required=True, help="Image holding the desired hairstyle")
+    parser.add_argument(
+        "--reference",
+        type=Path,
+        help="Image holding the desired hairstyle. Sets both shape and colour unless one "
+        "of them is given separately.",
+    )
+    parser.add_argument(
+        "--shape",
+        type=Path,
+        help="Image to take the hair shape from. The model accepts shape and colour from "
+        "different photos; passing one image for both is what ties a bob to its blonde.",
+    )
+    parser.add_argument(
+        "--color",
+        type=Path,
+        help="Image to take the hair colour from",
+    )
     parser.add_argument("--output", type=Path, required=True, help="Directory for the restyled images")
     parser.add_argument("--repo", type=Path, default=Path("external/HairFastGAN"))
     parser.add_argument("--weights", type=Path, default=Path("external/HairFastGAN_weights/pretrained_models"))
@@ -124,6 +140,12 @@ def main() -> None:
     )
     options = parser.parse_args()
 
+    shape = options.shape or options.reference
+    color = options.color or options.reference
+    if shape is None or color is None:
+        print("ERROR --reference, or both --shape and --color, must be given", flush=True)
+        sys.exit(1)
+
     faces = sorted(path for path in options.faces.iterdir() if path.suffix.lower() in IMAGE_SUFFIXES)
     if not faces:
         print("ERROR no input images found", flush=True)
@@ -131,6 +153,8 @@ def main() -> None:
 
     device = choose_device()
     print(f"DEVICE {device}", flush=True)
+    print(f"SHAPE {shape.name}", flush=True)
+    print(f"COLOR {color.name}", flush=True)
     model = build_model(options.repo.resolve(), options.weights.resolve(), device)
     options.output.mkdir(parents=True, exist_ok=True)
     print(f"TOTAL {len(faces)}", flush=True)
@@ -144,9 +168,7 @@ def main() -> None:
                 # align=True crops each face to the 1024px layout the model was trained
                 # on, and raises when no face is found — which is the expected outcome
                 # once the subject turns away, not an error worth aborting the run for.
-                result, aligned, *_ = model.swap(
-                    face, options.reference, options.reference, align=True, seed=options.seed
-                )
+                result, aligned, *_ = model.swap(face, shape, color, align=True, seed=options.seed)
             save_image(result, options.output / f"{face.stem}.png")
             save_image(aligned, options.output / f"{face.stem}_aligned.png")
             if not options.no_mask:

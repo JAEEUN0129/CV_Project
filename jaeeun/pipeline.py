@@ -141,7 +141,7 @@ class VirtualFittingPipeline:
             smoothed_dir, output, sampled_fps(source, self.config.fps), audio_source=source
         )
 
-    def restyle_image(self, source: Path, reference: Path) -> Path:
+    def restyle_image(self, source: Path, reference: Path, color_reference: Path | None = None) -> Path:
         """Replace the hair in one photo with the hairstyle shown in ``reference``.
 
         Unlike recoloring, this regenerates the hair, so the result is the model's square
@@ -154,7 +154,10 @@ class VirtualFittingPipeline:
         shutil.copy(source, staging / f"photo{source.suffix or '.png'}")
 
         results = HairstyleTransfer().restyle_folder(
-            staging, reference, self.config.workspace / "hairstyle_output"
+            staging,
+            reference,
+            self.config.workspace / "hairstyle_output",
+            color_reference=color_reference,
         )
         if not results:
             raise ValueError("사진에서 얼굴을 찾지 못했습니다.")
@@ -168,6 +171,7 @@ class VirtualFittingPipeline:
         source: Path,
         reference: Path,
         on_progress: Callable[[int, int], None] | None = None,
+        color_reference: Path | None = None,
     ) -> Path:
         """Apply one hairstyle across a clip and reassemble it into an MP4.
 
@@ -184,7 +188,11 @@ class VirtualFittingPipeline:
         if restyled_dir.exists():
             shutil.rmtree(restyled_dir)
         results = HairstyleTransfer().restyle_folder(
-            self.config.workspace / "frames", reference, restyled_dir, on_progress
+            self.config.workspace / "frames",
+            reference,
+            restyled_dir,
+            on_progress,
+            color_reference=color_reference,
         )
         if not results:
             raise ValueError("얼굴이 보이는 프레임이 없습니다.")

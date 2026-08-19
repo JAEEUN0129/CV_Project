@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from jaeeun.video import frames_to_mp4  # noqa: E402
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg"}
+# Written next to each result by the hairstyle worker; not frames of the video.
+COMPANION_SUFFIXES = ("_aligned", "_mask")
 
 
 def main() -> None:
@@ -34,10 +36,10 @@ def main() -> None:
         "not 8 — using the requested rate instead plays the result back too fast.",
     )
     parser.add_argument(
-        "--skip-aligned",
+        "--include-extras",
         action="store_true",
-        default=True,
-        help="Ignore the *_aligned.png comparison copies the worker writes alongside results",
+        help="Also treat the worker's *_aligned.png and *_mask.png companion files as frames. "
+        "They sit in the same folder as the results and are not part of the video.",
     )
     options = parser.parse_args()
 
@@ -45,7 +47,7 @@ def main() -> None:
         path
         for path in options.frames.iterdir()
         if path.suffix.lower() in IMAGE_SUFFIXES
-        and not (options.skip_aligned and path.stem.endswith("_aligned"))
+        and not (not options.include_extras and path.stem.endswith(COMPANION_SUFFIXES))
     )
     if not frames:
         raise SystemExit(f"이미지를 찾을 수 없습니다: {options.frames}")

@@ -49,8 +49,13 @@ class HairstyleTransfer:
         reference: Path,
         output_dir: Path,
         on_progress: Callable[[int, int], None] | None = None,
+        color_reference: Path | None = None,
     ) -> list[Path]:
         """Restyle every face image in ``faces_dir``; returns the results in frame order.
+
+        ``reference`` supplies the hair shape. ``color_reference`` supplies the colour when
+        given; without it the shape photo's colour comes along too, which is why choosing a
+        bob used to force the reference's blonde.
 
         Images the face detector cannot handle are skipped rather than failing the run,
         because a subject who turns away mid-clip is normal input, not a fault.
@@ -66,7 +71,8 @@ class HairstyleTransfer:
         command = [
             str(self.environment.interpreter.resolve()), "-u", str(Path("jaeeun/hair_runner.py").resolve()),
             "--faces", str(faces_dir.resolve()),
-            "--reference", str(reference.resolve()),
+            "--shape", str(reference.resolve()),
+            "--color", str((color_reference or reference).resolve()),
             "--output", str(output_dir.resolve()),
             "--repo", str(self.environment.repo.resolve()),
             "--weights", str(self.environment.weights.resolve()),
@@ -100,4 +106,10 @@ class HairstyleTransfer:
             print("\n".join(transcript), file=sys.stderr)
             raise RuntimeError(f"헤어스타일 변경에 실패했습니다 (종료 코드 {code}): {detail}")
         self.last_skipped = skipped
-        return sorted(path for path in output_dir.glob("*.png") if not path.stem.endswith("_aligned"))
+        # The worker writes an aligned copy and a hair mask beside each result; neither is
+        # a result itself.
+        return sorted(
+            path
+            for path in output_dir.glob("*.png")
+            if not path.stem.endswith(("_aligned", "_mask"))
+        )
