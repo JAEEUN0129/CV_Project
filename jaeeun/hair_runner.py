@@ -133,6 +133,13 @@ def main() -> None:
     parser.add_argument("--weights", type=Path, default=Path("external/HairFastGAN_weights/pretrained_models"))
     parser.add_argument("--seed", type=int, default=3407, help="Fixed so a rerun reproduces the same styling")
     parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="Report which frames the face detector can handle and stop. Loading the "
+        "networks takes half a minute and each frame costs minutes, so answering "
+        "'will this clip work at all' before that is worth a separate mode.",
+    )
+    parser.add_argument(
         "--no-mask",
         action="store_true",
         help="Skip writing the hair mask. It is free to produce and needed by every "
@@ -142,7 +149,8 @@ def main() -> None:
 
     shape = options.shape or options.reference
     color = options.color or options.reference
-    if shape is None or color is None:
+    # The check mode never generates anything, so it needs no reference images.
+    if not options.check_only and (shape is None or color is None):
         print("ERROR --reference, or both --shape and --color, must be given", flush=True)
         sys.exit(1)
 
@@ -150,6 +158,25 @@ def main() -> None:
     if not faces:
         print("ERROR no input images found", flush=True)
         sys.exit(1)
+
+    if options.check_only:
+        # Only the landmark detector is needed, so this stays in the seconds range.
+        sys.path.insert(0, str(options.repo.resolve()))
+        from utils.shape_predictor import align_face
+        from torchvision.io import read_image, ImageReadMode
+
+        print(f"TOTAL {len(faces)}", flush=True)
+        usable = 0
+        for index, face in enumerate(faces):
+            try:
+                align_face([read_image(str(face), mode=ImageReadMode.RGB)])
+                usable += 1
+                print(f"USABLE {face.name}", flush=True)
+            except Exception:
+                print(f"UNUSABLE {face.name}", flush=True)
+            print(f"PROGRESS {index + 1} {len(faces)}", flush=True)
+        print(f"COMPLETED {usable}", flush=True)
+        sys.exit(0 if usable else 2)
 
     device = choose_device()
     print(f"DEVICE {device}", flush=True)

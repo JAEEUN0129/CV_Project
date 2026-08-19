@@ -43,6 +43,59 @@ class HairstyleTransfer:
     def __init__(self, environment: HairstyleEnvironment | None = None) -> None:
         self.environment = environment or HairstyleEnvironment()
 
+    def _worker_command(self, faces_dir: Path, output_dir: Path) -> list[str]:
+        # The model resolves several of its own weight paths relative to the working
+        # directory, so the worker runs from inside the repository and everything the
+        # caller supplies is passed as an absolute path.
+        return [
+            str(self.environment.interpreter.resolve()), "-u", str(Path("jaeeun/hair_runner.py").resolve()),
+            "--faces", str(faces_dir.resolve()),
+            "--output", str(output_dir.resolve()),
+            "--repo", str(self.environment.repo.resolve()),
+            "--weights", str(self.environment.weights.resolve()),
+        ]
+
+    def _run(self, command: list[str], on_progress: Callable[[int, int], None] | None):
+        skipped, transcript = [], []
+        with subprocess.Popen(
+            command,
+            cwd=str(self.environment.repo.resolve()),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        ) as worker:
+            for line in worker.stdout:
+                line = line.strip()
+                transcript.append(line)
+                if line.startswith("PROGRESS ") and on_progress:
+                    done, total = line.split()[1:3]
+                    on_progress(int(done), int(total))
+                elif line.startswith(("SKIP ", "UNUSABLE ")):
+                    skipped.append(line.split()[1])
+            code = worker.wait()
+        return code, skipped, transcript
+
+    def check_frames(
+        self,
+        faces_dir: Path,
+        on_progress: Callable[[int, int], None] | None = None,
+    ) -> tuple[list[str], list[str]]:
+        """Report which frames the face detector can handle, before committing to a run.
+
+        Restyling costs minutes a frame; deciding whether a clip is usable at all should
+        not. This loads only the landmark detector, so a short clip is answered in under a
+        minute instead of an hour. Returns (usable, unusable) frame names.
+        """
+        missing = self.environment.missing_parts()
+        if missing:
+            raise RuntimeError(f"헤어스타일 변경을 쓸 수 없습니다. 준비되지 않은 항목: {', '.join(missing)}")
+
+        command = self._worker_command(faces_dir, faces_dir) + ["--check-only"]
+        _, unusable, transcript = self._run(command, on_progress)
+        usable = [line.split()[1] for line in transcript if line.startswith("USABLE ")]
+        return usable, unusable
+
     def restyle_folder(
         self,
         faces_dir: Path,
@@ -65,37 +118,11 @@ class HairstyleTransfer:
             raise RuntimeError(f"헤어스타일 변경을 쓸 수 없습니다. 준비되지 않은 항목: {', '.join(missing)}")
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        # The model resolves several of its own weight paths relative to the working
-        # directory, so the worker has to run from inside the repository. Everything the
-        # caller supplies is therefore passed as an absolute path.
-        command = [
-            str(self.environment.interpreter.resolve()), "-u", str(Path("jaeeun/hair_runner.py").resolve()),
-            "--faces", str(faces_dir.resolve()),
+        command = self._worker_command(faces_dir, output_dir) + [
             "--shape", str(reference.resolve()),
             "--color", str((color_reference or reference).resolve()),
-            "--output", str(output_dir.resolve()),
-            "--repo", str(self.environment.repo.resolve()),
-            "--weights", str(self.environment.weights.resolve()),
         ]
-        skipped: list[str] = []
-        transcript: list[str] = []
-        with subprocess.Popen(
-            command,
-            cwd=str(self.environment.repo.resolve()),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        ) as worker:
-            for line in worker.stdout:
-                line = line.strip()
-                transcript.append(line)
-                if line.startswith("PROGRESS ") and on_progress:
-                    done, total = line.split()[1:3]
-                    on_progress(int(done), int(total))
-                elif line.startswith("SKIP "):
-                    skipped.append(line.split()[1])
-            code = worker.wait()
+        code, skipped, transcript = self._run(command, on_progress)
 
         if code == 2:
             raise RuntimeError("얼굴을 찾을 수 있는 프레임이 없습니다. 인물이 정면을 향하는 화면을 사용해 주세요.")
