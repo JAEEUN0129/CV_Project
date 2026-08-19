@@ -84,6 +84,30 @@ def build_model(repo: Path, weights: Path, device: str):
     return HairFast(args)
 
 
+# The model's own face parser labels hair 13 after its label remapping. Every stage of
+# the transfer relies on this, so the same value is used here rather than a second parser.
+HAIR_LABEL = 13
+
+
+def hair_mask_of(image: "torch.Tensor", repo: Path) -> "torch.Tensor":
+    """Return the hair mask the model itself sees in a generated image.
+
+    The project's own body parser is trained on full-length photographs and mislabels
+    these tight, re-aligned face crops — it found 7% hair where roughly a third of the
+    frame is hair. The model's internal parser is trained on exactly this framing, and it
+    has already run during generation, so reusing it costs nothing and is what the
+    transfer itself trusted.
+    """
+    import torchvision.transforms as T
+    from models.Net import get_segmentation
+
+    # The parser expects ImageNet-normalised input; callers inside the repo do this too.
+    normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    batched = image.unsqueeze(0) if image.dim() == 3 else image
+    parsing = get_segmentation(normalize(batched.clip(0, 1)), resize=False)
+    return (parsing[0, 0] == HAIR_LABEL).float()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Transfer one hairstyle onto every face image in a folder.")
     parser.add_argument("--faces", type=Path, required=True, help="Directory of face images to restyle")
@@ -92,6 +116,12 @@ def main() -> None:
     parser.add_argument("--repo", type=Path, default=Path("external/HairFastGAN"))
     parser.add_argument("--weights", type=Path, default=Path("external/HairFastGAN_weights/pretrained_models"))
     parser.add_argument("--seed", type=int, default=3407, help="Fixed so a rerun reproduces the same styling")
+    parser.add_argument(
+        "--no-mask",
+        action="store_true",
+        help="Skip writing the hair mask. It is free to produce and needed by every "
+        "post-processing step, so leave it on unless disk space is tight.",
+    )
     options = parser.parse_args()
 
     faces = sorted(path for path in options.faces.iterdir() if path.suffix.lower() in IMAGE_SUFFIXES)
@@ -119,6 +149,9 @@ def main() -> None:
                 )
             save_image(result, options.output / f"{face.stem}.png")
             save_image(aligned, options.output / f"{face.stem}_aligned.png")
+            if not options.no_mask:
+                mask = hair_mask_of(result, options.repo)
+                save_image(mask, options.output / f"{face.stem}_mask.png")
             completed += 1
             print(f"OK {face.name}", flush=True)
         except Exception as error:
