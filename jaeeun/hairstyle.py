@@ -9,21 +9,42 @@ arrive so a caller can report per-frame progress during a run that takes minutes
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+import os
 import subprocess
 import sys
 
 
 @dataclass(frozen=True)
 class HairstyleEnvironment:
-    interpreter: Path = Path(".venv_hair/Scripts/python.exe")
+    """Where the isolated hairstyle environment lives.
+
+    The separate interpreter exists to keep HairFastGAN's library versions away from the
+    rest of the project. That conflict is a local-machine problem: on a GPU host built
+    from a single image there is one interpreter and nothing to isolate from. So the path
+    is resolved rather than fixed — an explicit override first, then the local virtual
+    environment, then the interpreter already running.
+    """
+
+    interpreter: Path | None = None
     repo: Path = Path("external/HairFastGAN")
     weights: Path = Path("external/HairFastGAN_weights/pretrained_models")
     presets: Path = Path("data/jaeeun/hairstyles")
 
+    def resolve_interpreter(self) -> Path:
+        override = os.environ.get("HAIRSTYLE_PYTHON")
+        if override:
+            return Path(override)
+        if self.interpreter is not None:
+            return self.interpreter
+        for candidate in (Path(".venv_hair/Scripts/python.exe"), Path(".venv_hair/bin/python")):
+            if candidate.exists():
+                return candidate
+        return Path(sys.executable)
+
     def missing_parts(self) -> list[str]:
         """Name whatever is absent, so the UI can explain the gap instead of crashing."""
         required = {
-            "격리 실행 환경": self.interpreter,
+            "격리 실행 환경": self.resolve_interpreter(),
             "모델 코드": self.repo,
             "모델 가중치": self.weights,
         }
@@ -48,7 +69,8 @@ class HairstyleTransfer:
         # directory, so the worker runs from inside the repository and everything the
         # caller supplies is passed as an absolute path.
         return [
-            str(self.environment.interpreter.resolve()), "-u", str(Path("jaeeun/hair_runner.py").resolve()),
+            str(self.environment.resolve_interpreter().resolve()), "-u",
+            str(Path("jaeeun/hair_runner.py").resolve()),
             "--faces", str(faces_dir.resolve()),
             "--output", str(output_dir.resolve()),
             "--repo", str(self.environment.repo.resolve()),
