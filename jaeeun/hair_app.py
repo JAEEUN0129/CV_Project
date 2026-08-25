@@ -74,11 +74,11 @@ def render() -> None:
     st.markdown("### 원하는 헤어스타일 텍스트")
     style_prompt = st.text_input(
         "원하는 헤어스타일 텍스트",
-        placeholder="예: 애쉬 브라운, burgundy red hair",
-        help="머리 모양은 스타일 사진에서 가져오며, 텍스트는 원하는 머리색을 지정합니다.",
+        placeholder="예: 차가운 애쉬 브라운으로 해주세요",
+        help="한글로 입력하면 HairCLIP 실행 전에 영어 색상 표현으로 자동 변환합니다.",
         label_visibility="collapsed",
     )
-    st.caption("머리 모양은 스타일 사진을 사용하고, 입력한 텍스트로 색상 참조를 생성합니다.")
+    st.caption("머리 모양은 스타일 사진을 사용하고, 한글 텍스트는 영어로 변환해 색상 참조를 생성합니다.")
 
     if missing:
         st.warning("서버에 준비되지 않은 항목이 있습니다: " + ", ".join(missing))

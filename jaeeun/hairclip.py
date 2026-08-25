@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -118,15 +119,25 @@ class HairClipColorEditor:
 
 _KOREAN_COLORS = {
     "애쉬 브라운": "gray brown", "애쉬브라운": "gray brown",
+    "초코 브라운": "dark brown", "초코브라운": "dark brown",
+    "초콜릿 브라운": "dark brown", "초콜릿브라운": "dark brown",
+    "카키 브라운": "green brown", "카키브라운": "green brown",
+    "레드 브라운": "red brown", "레드브라운": "red brown",
+    "오렌지 브라운": "orange brown", "오렌지브라운": "orange brown",
+    "밀크티 브라운": "light brown", "밀크티브라운": "light brown",
+    "다크 브라운": "dark brown", "다크브라운": "dark brown",
     "로즈 골드": "pink blond", "로즈골드": "pink blond",
     "블루 블랙": "blue black", "블루블랙": "blue black",
     "와인 레드": "burgundy red", "와인레드": "burgundy red",
     "검정": "black", "블랙": "black", "갈색": "brown", "브라운": "brown",
+    "플래티넘 블론드": "white blond", "플래티넘": "white blond",
     "금발": "blond", "블론드": "blond", "백금발": "white blond",
     "빨강": "red", "빨간색": "red", "레드": "red", "와인": "burgundy red",
     "주황": "orange", "오렌지": "orange", "노랑": "yellow", "옐로우": "yellow",
     "초록": "green", "그린": "green", "파랑": "blue", "블루": "blue",
-    "회색": "gray", "그레이": "gray", "은색": "gray", "핑크": "pink",
+    "실버": "gray", "회색": "gray", "그레이": "gray", "은색": "gray",
+    "버건디": "burgundy red", "코랄": "pink orange", "베이지": "light blond",
+    "네이비": "dark blue", "핑크": "pink",
     "분홍": "pink", "보라": "purple", "퍼플": "purple",
     "애쉬": "gray", 
 }
@@ -137,16 +148,38 @@ _KOREAN_MODIFIERS = {
     "선명한": "vivid", "은은한": "soft", "빛이 도는": "tinted",
 }
 
+_KOREAN_STYLE_WORDS = (
+    "앞머리 웨이브", "긴 웨이브", "짧은 웨이브", "긴 생머리", "짧은 머리",
+    "레이어드 컷", "레이어드컷", "허쉬 컷", "허쉬컷", "보브 컷", "보브컷",
+    "헤어스타일", "스타일", "앞머리", "생머리", "웨이브", "단발", "장발",
+)
+
+_KOREAN_FILLERS = (
+    "머리카락", "머리 색상", "머리색", "머리", "색상", "색깔", "색",
+    "으로 염색해 주세요", "으로 염색해주세요", "로 염색해 주세요", "로 염색해주세요",
+    "으로 바꿔 주세요", "으로 바꿔주세요", "로 바꿔 주세요", "로 바꿔주세요",
+    "으로 해 주세요", "으로 해주세요", "로 해 주세요", "로 해주세요",
+    "으로 해줘", "로 해줘", "하고 싶어요", "하고 싶어", "부탁해요", "부탁해",
+    "해주세요", "해 주세요", "해줘", " 에 ", " 은 ", " 는 ", " 을 ", " 를 ",
+)
+
 
 def normalize_color_prompt(prompt: str) -> str:
     """Map common Korean colour descriptions to HairCLIP's English text domain."""
     normalized = " ".join(prompt.strip().lower().split())
     if not normalized:
         raise ValueError("머리색을 텍스트로 입력해주세요.")
+    for phrase in sorted(_KOREAN_STYLE_WORDS, key=len, reverse=True):
+        normalized = normalized.replace(phrase, " ")
     for korean in sorted(_KOREAN_COLORS, key=len, reverse=True):
         normalized = normalized.replace(korean, _KOREAN_COLORS[korean])
     for korean in sorted(_KOREAN_MODIFIERS, key=len, reverse=True):
         normalized = normalized.replace(korean, _KOREAN_MODIFIERS[korean])
+    for phrase in sorted(_KOREAN_FILLERS, key=len, reverse=True):
+        normalized = normalized.replace(phrase, " ")
+    normalized = re.sub(r"\s+", " ", normalized).strip(" ,.")
+    if not normalized:
+        raise ValueError("텍스트에 원하는 머리색을 함께 입력해주세요.")
     if any("가" <= char <= "힣" for char in normalized):
         raise ValueError(
             "HairCLIP이 이해할 수 없는 한국어 표현입니다. 색 이름을 단순하게 쓰거나 영어로 입력해주세요."
