@@ -8,9 +8,14 @@ square crop and costs minutes a frame. Presenting them as equal options would mi
 
 from pathlib import Path
 import importlib
+import sys
 import tempfile
 
 import streamlit as st
+
+# Streamlit may execute this file with ``jaeeun/`` rather than the repository root on
+# sys.path (notably on VESSL), which makes absolute ``jaeeun.*`` imports fail.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import jaeeun.data as data_module
 import jaeeun.models as models_module
