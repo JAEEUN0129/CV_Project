@@ -8,6 +8,7 @@ import shutil
 import numpy as np
 
 from .data import extract_frames, preprocess_image, sampled_fps
+from .hairclip import HairClipColorEditor
 from .hairstyle import HairstyleTransfer
 from .models import HumanParser, Sam2MaskPropagator, recolor_masked_region
 from .video import frames_to_mp4, smooth_frames
@@ -165,6 +166,11 @@ class VirtualFittingPipeline:
         output = self.config.workspace / "outputs" / f"hairstyle_{reference.stem}.png"
         shutil.copy(results[0], output)
         return output
+
+    def create_text_color_reference(self, reference: Path, prompt: str) -> Path:
+        """Edit a hairstyle preset's colour with HairCLIP for use by HairFastGAN."""
+        output = self.config.workspace / "hairclip" / f"{reference.stem}_text_color.png"
+        return HairClipColorEditor().edit(reference, prompt, output)
 
     def restyle_video(
         self,

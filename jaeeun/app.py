@@ -16,17 +16,19 @@ import jaeeun.data as data_module
 import jaeeun.models as models_module
 import jaeeun.video as video_module
 import jaeeun.hairstyle as hairstyle_module
+import jaeeun.hairclip as hairclip_module
 import jaeeun.pipeline as pipeline_module
 
 # Streamlit keeps imported modules in memory between reruns. Reload dependencies before the
 # pipeline; otherwise a fresh pipeline can import a stale module that lacks new helpers.
 importlib.invalidate_caches()
-for _module in (data_module, models_module, video_module, hairstyle_module):
+for _module in (data_module, models_module, video_module, hairstyle_module, hairclip_module):
     importlib.reload(_module)
 pipeline_module = importlib.reload(pipeline_module)
 VirtualFittingPipeline = pipeline_module.VirtualFittingPipeline
 HairstyleEnvironment = hairstyle_module.HairstyleEnvironment
 HairstyleTransfer = hairstyle_module.HairstyleTransfer
+HairClipEnvironment = hairclip_module.HairClipEnvironment
 
 RESTYLE = "헤어스타일 바꾸기"
 RECOLOR_HAIR = "머리 색 바꾸기"
@@ -35,6 +37,7 @@ RECOLOR_BOTH = "머리·상의 함께"
 INSPECT = "부위 확인"
 
 KEEP_MY_COLOR = "지금 내 머리색 그대로"
+TEXT_COLOR = "텍스트로 머리색 만들기"
 UPLOAD_OWN = "사진 직접 올리기"
 
 st.set_page_config(page_title="헤어·의상 가상 피팅", layout="wide", initial_sidebar_state="expanded")
@@ -77,8 +80,10 @@ def pick_reference(label: str, presets: dict, key: str, extra: list | None = Non
 
 
 environment = HairstyleEnvironment()
+hairclip_environment = HairClipEnvironment()
 presets = environment.available_presets()
 missing = environment.missing_parts()
+hairclip_missing = hairclip_environment.missing_parts()
 
 st.title("헤어·의상 가상 피팅")
 st.markdown(
@@ -125,6 +130,7 @@ input_path = save_upload(uploaded)
 pipeline = VirtualFittingPipeline()
 
 shape_reference = color_reference = None
+color_prompt = None
 hair_color = outfit_color = None
 
 with st.sidebar:
@@ -132,11 +138,20 @@ with st.sidebar:
     if action == RESTYLE:
         shape_reference, _ = pick_reference("머리 모양", presets, "shape")
         color_reference, color_choice = pick_reference(
-            "머리 색", presets, "color", extra=[KEEP_MY_COLOR]
+            "머리 색", presets, "color", extra=[KEEP_MY_COLOR, TEXT_COLOR]
         )
         if color_choice == KEEP_MY_COLOR:
             color_reference = None
             st.caption("색을 따로 고르지 않으면 모양 사진의 색이 함께 옵니다.")
+        elif color_choice == TEXT_COLOR:
+            color_reference = None
+            color_prompt = st.text_input(
+                "원하는 머리색",
+                placeholder="예: 애쉬 브라운, burgundy red",
+                help="HairCLIP이 선택한 모양 사진의 머리색을 편집한 뒤 색상 참조로 사용합니다.",
+            )
+            if hairclip_missing:
+                st.warning("HairCLIP 준비되지 않음: " + ", ".join(hairclip_missing))
     else:
         if action in (RECOLOR_HAIR, RECOLOR_BOTH):
             hair_color = st.color_picker("머리 색", "#6A3520")
@@ -158,6 +173,8 @@ with left:
         reference_columns[0].image(str(shape_reference), caption="모양", width=140)
         if color_reference:
             reference_columns[1].image(str(color_reference), caption="색", width=140)
+        elif color_prompt:
+            reference_columns[1].caption("텍스트 색: " + color_prompt)
         else:
             reference_columns[1].caption("색: 모양 사진과 동일")
 
@@ -199,6 +216,15 @@ with right:
                 if shape_reference is None:
                     raise ValueError("머리 모양 사진을 먼저 골라주세요.")
                 progress = st.progress(0.0, text="모델을 준비하는 중...")
+                if color_choice == TEXT_COLOR:
+                    if hairclip_missing:
+                        raise RuntimeError("HairCLIP을 사용할 수 없습니다: " + ", ".join(hairclip_missing))
+                    if not color_prompt:
+                        raise ValueError("원하는 머리색을 텍스트로 입력해주세요.")
+                    progress.progress(0.05, text="텍스트로 색상 참조를 만드는 중...")
+                    color_reference = pipeline.create_text_color_reference(
+                        shape_reference, color_prompt
+                    )
                 if is_video:
                     produced = pipeline.restyle_video(
                         input_path, shape_reference,
