@@ -1,10 +1,23 @@
-"""Streamlit UI for hair and outfit virtual fitting.
+"""Streamlit entry point for the simplified hair-only interface.
 
 Two editing paths sit behind one screen and they behave very differently, which the layout
 has to make obvious. Recolouring keeps the original framing, sound and back-of-head shots
 and finishes in seconds; restyling regenerates the hair, needs a face in view, returns a
 square crop and costs minutes a frame. Presenting them as equal options would mislead.
 """
+
+# Keep this small entry point compatible with existing launch commands while the actual
+# hair-only page lives in a focused module.  ``st.stop`` prevents the legacy interface
+# below from rendering; it can be removed after the old UI is retired completely.
+import sys as _sys
+from pathlib import Path as _Path
+
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
+from jaeeun.hair_app import render as _render_hair_app  # noqa: E402
+
+_render_hair_app()
+import streamlit as _streamlit  # noqa: E402
+_streamlit.stop()
 
 from pathlib import Path
 import importlib
