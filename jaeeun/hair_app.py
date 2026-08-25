@@ -71,9 +71,9 @@ def render() -> None:
         if style_upload:
             st.image(style_upload, use_container_width=True)
 
-    st.markdown("### 원하는 헤어스타일 텍스트")
+    st.markdown("### 원하는 헤어컬러 텍스트")
     style_prompt = st.text_input(
-        "원하는 헤어스타일 텍스트",
+        "원하는 헤어컬러 텍스트",
         placeholder="예: 차가운 애쉬 브라운으로 해주세요",
         help="한글로 입력하면 HairCLIP 실행 전에 영어 색상 표현으로 자동 변환합니다.",
         label_visibility="collapsed",
