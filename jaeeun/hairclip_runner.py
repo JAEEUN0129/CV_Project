@@ -36,7 +36,7 @@ def clear_package(name: str) -> None:
             del sys.modules[loaded]
 
 
-def install_e4e_cpu_ops(repo: Path) -> None:
+def install_e4e_native_ops(repo: Path) -> None:
     """Replace e4e's CUDA extensions with HairCLIP's native PyTorch operators."""
     op_dir = repo / "models" / "stylegan2" / "op"
 
@@ -59,10 +59,12 @@ def install_e4e_cpu_ops(repo: Path) -> None:
 def invert(source: Path, repo: Path, checkpoint: Path, landmark_model: Path, device: str):
     e4e = repo / "encoder4editing"
     sys.path.insert(0, str(e4e))
-    if device == "cpu":
-        import models
-        import models.stylegan2
-        install_e4e_cpu_ops(repo)
+    # Upstream e4e compiles custom CUDA/C++ operators at import time.  VESSL images do
+    # not consistently include ninja or a matching CUDA compiler, while HairCLIP ships
+    # equivalent native PyTorch implementations that work on both CPU and CUDA.
+    import models
+    import models.stylegan2
+    install_e4e_native_ops(repo)
     from PIL import Image
     if not hasattr(Image, "ANTIALIAS"):
         Image.ANTIALIAS = Image.Resampling.LANCZOS
