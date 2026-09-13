@@ -216,11 +216,12 @@ HairFastGAN의 프레임별 생성을 바로 교체하기 전에, VACE가 헤어
 |---|---|---|
 | `vace-wan21-1.3b` | 모델 전체 | Hugging Face `ali-vilab/VACE-Wan2.1-1.3B` 스냅샷 |
 | `vace-input` | `source.mp4` | 원본 영상 |
-| `vace-input` | `hair-mask.mp4` | 흰색은 생성할 머리, 검은색은 보존할 영역 |
+| `vace-input` | `hair-mask.png` | 첫 프레임의 흰색=머리, 검은색=보존 마스크 |
 | `vace-reference` | `style.png` | HairCLIP 결과 또는 원본 헤어 참조 사진 |
 
-`source.mp4`와 `hair-mask.mp4`는 해상도, fps, 프레임 수가 모두 같아야 한다. VACE에서는
-마스크의 흰색 영역을 새로 생성하고 검은색 영역을 유지한다.
+`hair-mask.png`는 `source.mp4`의 첫 프레임과 해상도가 같아야 한다. VACE의 `masktrack`
+전처리가 이 마스크를 이후 프레임으로 추적한다. 흰색 영역은 새로 생성하고 검은색
+영역은 보존한다.
 
 ### 실행
 

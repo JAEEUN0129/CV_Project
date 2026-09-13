@@ -2,7 +2,7 @@
 #
 # 실행 전 VESSL Dataset 세 개를 준비한다.
 #   vace-input/source.mp4       : 3~5초 원본 영상
-#   vace-input/hair-mask.mp4    : 원본과 해상도·fps·프레임 수가 같은 흰색=머리 마스크 영상
+#   vace-input/hair-mask.png    : 첫 프레임의 흰색=머리 마스크
 #   vace-reference/style.png   : 색상까지 반영된 헤어 참조 이미지
 #
 # 모델 가중치는 매번 다운로드하지 않도록 VESSL Dataset으로 미리 저장한다.
@@ -36,14 +36,17 @@ run:
       pip install "wan@git+https://github.com/Wan-Video/Wan2.1"
 
       test -f /root/input/source.mp4
-      test -f /root/input/hair-mask.mp4
+      test -f /root/input/hair-mask.png
       test -f /root/reference/style.png
 
-      python vace/vace_wan_inference.py \
+      python vace/vace_pipeline.py \
+        --base wan \
+        --task swap_anything \
+        --mode masktrack,plain \
+        --video /root/input/source.mp4 \
+        --mask /root/input/hair-mask.png \
+        --image /root/reference/style.png \
         --ckpt_dir /root/vace-model \
-        --src_video /root/input/source.mp4 \
-        --src_mask /root/input/hair-mask.mp4 \
-        --src_ref_images /root/reference/style.png \
         --prompt "A photorealistic video of the same person with the hairstyle and hair color from the reference image. Preserve the person's identity, face, clothing, pose, camera motion, lighting, and background. Only the hair changes, with natural strands and temporally consistent motion."
 
       mkdir -p /root/outputs
