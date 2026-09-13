@@ -204,6 +204,48 @@ cd /root/CV_Project && git pull && pip install -r jaeeun/requirements-server.txt
 
 ---
 
+## I. VACE 헤어 영상 스모크 테스트
+
+HairFastGAN의 프레임별 생성을 바로 교체하기 전에, VACE가 헤어 참조를 따르면서 원본의
+얼굴·배경을 유지하는지부터 확인한다. 첫 테스트는 14B보다 싸고 빠른 **Wan2.1-VACE-1.3B**를
+쓴다. 입력은 3~5초, 480p, 한 명, 정면에 가까운 영상을 권장한다.
+
+### Dataset 준비
+
+| VESSL Dataset | 파일 | 설명 |
+|---|---|---|
+| `vace-wan21-1.3b` | 모델 전체 | Hugging Face `ali-vilab/VACE-Wan2.1-1.3B` 스냅샷 |
+| `vace-input` | `source.mp4` | 원본 영상 |
+| `vace-input` | `hair-mask.mp4` | 흰색은 생성할 머리, 검은색은 보존할 영역 |
+| `vace-reference` | `style.png` | HairCLIP 결과 또는 원본 헤어 참조 사진 |
+
+`source.mp4`와 `hair-mask.mp4`는 해상도, fps, 프레임 수가 모두 같아야 한다. VACE에서는
+마스크의 흰색 영역을 새로 생성하고 검은색 영역을 유지한다.
+
+### 실행
+
+`vessl/vace-smoke.yaml`의 Dataset URI가 실제 이름과 같은지 확인한 다음 실행한다.
+
+```bash
+vessl run -f vessl/vace-smoke.yaml
+```
+
+첫 테스트에서는 HairCLIP을 서버에서 같이 실행하지 않는다. 로컬 또는 기존 환경에서 만든
+HairCLIP 결과를 `style.png`로 올려 VACE 자체의 성능만 분리해 검증한다.
+
+결과에서 다음 네 가지를 먼저 본다.
+
+1. 헤어 모양과 색상이 `style.png`를 따르는가
+2. 프레임 사이에서 머리 모양이 깜빡이거나 바뀌지 않는가
+3. 얼굴 정체성과 표정이 유지되는가
+4. 마스크 밖의 의상·배경이 바뀌지 않는가
+
+1.3B에서 파이프라인이 성공하고 헤어 조건을 의미 있게 따라가면, 같은 입력으로
+14B를 돌려 품질 차이를 비교한다. 14B는 공식 예시가 8 GPU 분산 실행을 기준으로 하므로,
+단일 L4에서 바로 시작하지 않는다.
+
+---
+
 ## 걸렸던 문제와 원인
 
 | 증상 | 원인 | 대응 |
