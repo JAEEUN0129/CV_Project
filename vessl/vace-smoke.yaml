@@ -6,7 +6,7 @@
 #   vace-reference/style.png   : 색상까지 반영된 헤어 참조 이미지
 #
 # 모델 가중치는 매번 다운로드하지 않도록 VESSL Dataset으로 미리 저장한다.
-# Hugging Face repo: ali-vilab/VACE-Wan2.1-1.3B
+# Hugging Face repo: Wan-AI/Wan2.1-VACE-1.3B
 
 name: vace-hair-smoke-test
 description: Wan2.1-VACE-1.3B로 마스크 기반 헤어 영상 생성을 검증한다

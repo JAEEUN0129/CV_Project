@@ -214,7 +214,7 @@ HairFastGAN의 프레임별 생성을 바로 교체하기 전에, VACE가 헤어
 
 | VESSL Dataset | 파일 | 설명 |
 |---|---|---|
-| `vace-wan21-1.3b` | 모델 전체 | Hugging Face `ali-vilab/VACE-Wan2.1-1.3B` 스냅샷 |
+| `vace-wan21-1.3b` | 모델 전체 | Hugging Face `Wan-AI/Wan2.1-VACE-1.3B` 스냅샷 |
 | `vace-input` | `source.mp4` | 원본 영상 |
 | `vace-input` | `hair-mask.png` | 첫 프레임의 흰색=머리, 검은색=보존 마스크 |
 | `vace-reference` | `style.png` | HairCLIP 결과 또는 원본 헤어 참조 사진 |
