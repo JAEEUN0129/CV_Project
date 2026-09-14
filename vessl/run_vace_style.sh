@@ -32,12 +32,20 @@ case "$STYLE_ID" in
     case "$BANGS_STYLE" in
       straight)
         STYLE_PHRASE="full straight bangs"
+        BANGS_MASK_ARGS=(--bangs-style straight --forehead-ratio 0.28)
         ;;
       choppy)
         STYLE_PHRASE="short choppy bangs"
+        BANGS_MASK_ARGS=(--bangs-style choppy --forehead-ratio 0.22)
         ;;
       side)
-        STYLE_PHRASE="side-swept bangs"
+        STYLE_PHRASE="side-swept bangs flowing toward the right temple"
+        BANGS_MASK_ARGS=(
+          --bangs-style side
+          --side-direction right
+          --side-short-ratio 0.15
+          --side-long-ratio 0.45
+        )
         ;;
       *)
         echo "Unknown bangs style: $BANGS_STYLE" >&2
@@ -53,7 +61,7 @@ case "$STYLE_ID" in
       --source "$TEST_DIR/source.mp4" \
       --output "$EDIT_MASK" \
       --masked-video-output "$MASKED_VIDEO" \
-      --forehead-ratio 0.28 \
+      "${BANGS_MASK_ARGS[@]}" \
       --temporal-window 3
     DIRECT_INFERENCE=1
     PROMPT="Edit this video so that the person has $STYLE_PHRASE. Change only the bangs area in every frame. Keep the rest of the hairstyle, overall hair length, hair color, face identity, skin, glasses, clothing, pose, lighting, camera motion, and background unchanged. Make the new bangs clearly recognizable, natural-looking, and temporally consistent throughout the video."

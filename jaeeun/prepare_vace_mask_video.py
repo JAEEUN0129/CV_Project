@@ -25,6 +25,10 @@ def _frame_mask(
     class_map: np.ndarray,
     labels: dict[int, str],
     forehead_ratio: float,
+    bangs_style: str = "straight",
+    side_short_ratio: float = 0.15,
+    side_long_ratio: float = 0.45,
+    side_direction: str = "right",
 ) -> np.ndarray | None:
     ids = _normalise_labels(labels)
     if "hair" not in ids or "face" not in ids:
@@ -32,13 +36,25 @@ def _frame_mask(
 
     hair = class_map == ids["hair"]
     face = class_map == ids["face"]
-    ys, _ = np.where(face)
+    ys, xs = np.where(face)
     if not hair.any() or not len(ys):
         return None
 
     face_top, face_bottom = int(ys.min()), int(ys.max())
-    forehead_bottom = face_top + round((face_bottom - face_top + 1) * forehead_ratio)
-    forehead = face & (np.indices(face.shape)[0] <= forehead_bottom)
+    rows, columns = np.indices(face.shape)
+    if bangs_style == "side":
+        face_left, face_right = int(xs.min()), int(xs.max())
+        normalised_x = np.clip(
+            (columns - face_left) / max(1, face_right - face_left), 0.0, 1.0
+        )
+        if side_direction == "left":
+            normalised_x = 1.0 - normalised_x
+        depth = side_short_ratio + (side_long_ratio - side_short_ratio) * normalised_x
+        forehead_bottom = face_top + (face_bottom - face_top + 1) * depth
+        forehead = face & (rows <= forehead_bottom)
+    else:
+        forehead_bottom = face_top + round((face_bottom - face_top + 1) * forehead_ratio)
+        forehead = face & (rows <= forehead_bottom)
     mask = hair | forehead
 
     # Join small gaps between the parsed hairline and the forehead band.
@@ -73,6 +89,10 @@ def build_mask_video(
     masked_video_output: Path | None = None,
     forehead_ratio: float = 0.28,
     temporal_window: int = 3,
+    bangs_style: str = "straight",
+    side_short_ratio: float = 0.15,
+    side_long_ratio: float = 0.45,
+    side_direction: str = "right",
 ) -> Path:
     capture = cv2.VideoCapture(str(source))
     if not capture.isOpened():
@@ -92,7 +112,17 @@ def build_mask_video(
             if not cv2.imwrite(str(frame_path), frame):
                 raise ValueError("Could not write a temporary video frame")
             class_map, labels = parser.predict(frame_path)
-            masks.append(_frame_mask(class_map, labels, forehead_ratio))
+            masks.append(
+                _frame_mask(
+                    class_map,
+                    labels,
+                    forehead_ratio,
+                    bangs_style,
+                    side_short_ratio,
+                    side_long_ratio,
+                    side_direction,
+                )
+            )
     capture.release()
 
     if not masks:
@@ -149,11 +179,17 @@ def main() -> None:
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--masked-video-output", type=Path)
+    parser.add_argument("--bangs-style", choices=("straight", "choppy", "side"), default="straight")
     parser.add_argument("--forehead-ratio", type=float, default=0.28)
+    parser.add_argument("--side-short-ratio", type=float, default=0.15)
+    parser.add_argument("--side-long-ratio", type=float, default=0.45)
+    parser.add_argument("--side-direction", choices=("left", "right"), default="right")
     parser.add_argument("--temporal-window", type=int, default=3)
     args = parser.parse_args()
     if not 0 <= args.forehead_ratio <= 0.5:
         parser.error("--forehead-ratio must be between 0 and 0.5")
+    if not 0 <= args.side_short_ratio <= args.side_long_ratio <= 0.5:
+        parser.error("side ratios must satisfy 0 <= short <= long <= 0.5")
     if args.temporal_window < 1 or args.temporal_window % 2 == 0:
         parser.error("--temporal-window must be a positive odd number")
     build_mask_video(
@@ -162,6 +198,10 @@ def main() -> None:
         args.masked_video_output,
         args.forehead_ratio,
         args.temporal_window,
+        args.bangs_style,
+        args.side_short_ratio,
+        args.side_long_ratio,
+        args.side_direction,
     )
 
 
