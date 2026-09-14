@@ -15,8 +15,16 @@ case "$STYLE_ID" in
     ;;
   2)
     STYLE_IMAGE="$TEST_DIR/style2.png"
-    EDIT_MASK="$TEST_DIR/hair-mask.png"
-    PROMPT="A photorealistic video of the same person from the source video with long voluminous wavy hair matching the reference image. Preserve her identity, eyes, eyebrows, nose, mouth, facial expression, clothing, pose, lighting, camera motion, and background. Change only the hair, with natural strands and temporally consistent waves."
+    EDIT_MASK="$TEST_DIR/hair-mask-wavy.png"
+    cd "$PROJECT_DIR"
+    python -m jaeeun.prepare_vace_mask \
+      --source "$TEST_DIR/source.mp4" \
+      --base-mask "$TEST_DIR/hair-mask.png" \
+      --output "$EDIT_MASK" \
+      --wavy \
+      --side-pixels 40 \
+      --down-pixels 30
+    PROMPT="A photorealistic video of the same person from the source video with long voluminous wavy hair matching the reference image. The hair has clearly defined soft S-shaped waves from the mid-lengths continuously through the lower lengths and ends; the bottom sections and tips remain visibly wavy and full, never straight or flat. Preserve her identity, eyes, eyebrows, nose, mouth, facial expression, clothing, pose, lighting, camera motion, and background. Change only the hair, with natural strands and temporally consistent waves."
     ;;
   3)
     STYLE_IMAGE="$TEST_DIR/style3.jpg"
