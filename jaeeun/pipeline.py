@@ -11,7 +11,7 @@ from .data import extract_frames, preprocess_image, sampled_fps
 from .hairclip import HairClipColorEditor
 from .hairstyle import HairstyleTransfer
 from .models import HumanParser, Sam2MaskPropagator, recolor_masked_region
-from .video import frames_to_mp4, smooth_frames
+from .video import frames_to_mp4, normalise_hair_colour, smooth_frames
 
 
 @dataclass(frozen=True)
@@ -181,10 +181,12 @@ class VirtualFittingPipeline:
     ) -> Path:
         """Apply one hairstyle across a clip and reassemble it into an MP4.
 
-        Every frame is restyled independently rather than tracked, because the hairstyle
-        has to be redrawn for each head angle; measurements on this footage showed the
-        results drifting slightly less than the source frames already do, so the sequence
-        holds together without extra smoothing.
+        The hairstyle has to be redrawn for each head angle, so every frame is generated
+        on its own — which is what makes it flicker. The earlier conclusion that no
+        smoothing was needed came from a whole-frame difference that cannot tell the
+        subject moving from the hair boiling; measured on the hair alone, with motion
+        compensated, it drifts. Two things counter that: the worker aligns the clip with
+        smoothed face landmarks, and the hair colour is held to the clip median here.
         """
         frames = self.prepare_video(source)
         if not frames:
@@ -203,15 +205,19 @@ class VirtualFittingPipeline:
         if not results:
             raise ValueError("얼굴이 보이는 프레임이 없습니다.")
 
-        # Frames where the face was not found leave gaps, and ffmpeg needs an unbroken
-        # sequence, so renumber what survived into a fresh folder.
         ordered_dir = self.config.workspace / "hairstyle_sequence"
         if ordered_dir.exists():
             shutil.rmtree(ordered_dir)
-        ordered_dir.mkdir(parents=True)
-        for index, path in enumerate(results):
-            shutil.copy(path, ordered_dir / f"frame_{index:06d}.png")
+        masks = [path.with_name(f"{path.stem}_mask.png") for path in results]
+        if all(mask.exists() for mask in masks):
+            normalise_hair_colour(results, masks, ordered_dir)
+        else:
+            ordered_dir.mkdir(parents=True)
+            for index, path in enumerate(results):
+                shutil.copy(path, ordered_dir / f"frame_{index:06d}.png")
 
         output = self.config.workspace / "outputs" / f"hairstyle_{reference.stem}.mp4"
-        # No audio: dropped frames make the surviving run shorter than the original sound.
+        # No sound: the result is a face crop, not the original framing, so there is
+        # nothing for the sound to belong to. The worker does return one image per input
+        # frame, so the clip keeps the source's length and pace.
         return frames_to_mp4(ordered_dir, output, sampled_fps(source, self.config.fps))
