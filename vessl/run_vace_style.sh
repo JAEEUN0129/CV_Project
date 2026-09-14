@@ -30,10 +30,12 @@ case "$STYLE_ID" in
   3)
     STYLE_IMAGE="$TEST_DIR/style3.jpg"
     EDIT_MASK="$TEST_DIR/hair-mask-bangs.mp4"
+    MASKED_VIDEO="$TEST_DIR/source-bangs-masked.mp4"
     cd "$PROJECT_DIR"
     python -m jaeeun.prepare_vace_mask_video \
       --source "$TEST_DIR/source.mp4" \
       --output "$EDIT_MASK" \
+      --masked-video-output "$MASKED_VIDEO" \
       --forehead-ratio 0.28 \
       --temporal-window 3
     DIRECT_INFERENCE=1
@@ -65,7 +67,7 @@ cd "$VACE_DIR"
 if [[ "$DIRECT_INFERENCE" == "1" ]]; then
   python vace/vace_wan_inference.py \
     --ckpt_dir "$MODEL_DIR" \
-    --src_video "$TEST_DIR/source.mp4" \
+    --src_video "$MASKED_VIDEO" \
     --src_mask "$EDIT_MASK" \
     --src_ref_images "$STYLE_IMAGE" \
     --prompt "$PROMPT"

@@ -70,6 +70,7 @@ def _temporal_median(masks: list[np.ndarray], window: int) -> list[np.ndarray]:
 def build_mask_video(
     source: Path,
     output: Path,
+    masked_video_output: Path | None = None,
     forehead_ratio: float = 0.28,
     temporal_window: int = 3,
 ) -> Path:
@@ -110,6 +111,36 @@ def build_mask_video(
         writer.write(cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR))
     writer.release()
     print(f"Wrote {len(complete_masks)} mask frames at {fps:.3f} fps to {output}")
+
+    if masked_video_output is not None:
+        masked_video_output.parent.mkdir(parents=True, exist_ok=True)
+        source_capture = cv2.VideoCapture(str(source))
+        masked_writer = cv2.VideoWriter(
+            str(masked_video_output),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps,
+            (width, height),
+            True,
+        )
+        if not source_capture.isOpened() or not masked_writer.isOpened():
+            source_capture.release()
+            masked_writer.release()
+            raise ValueError(f"Could not create masked source video {masked_video_output}")
+        written = 0
+        for mask in complete_masks:
+            ok, frame = source_capture.read()
+            if not ok:
+                break
+            frame[mask] = 128
+            masked_writer.write(frame)
+            written += 1
+        source_capture.release()
+        masked_writer.release()
+        if written != len(complete_masks):
+            raise ValueError(
+                f"Masked source contains {written} frames, expected {len(complete_masks)}"
+            )
+        print(f"Wrote {written} masked source frames to {masked_video_output}")
     return output
 
 
@@ -117,6 +148,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--masked-video-output", type=Path)
     parser.add_argument("--forehead-ratio", type=float, default=0.28)
     parser.add_argument("--temporal-window", type=int, default=3)
     args = parser.parse_args()
@@ -124,7 +156,13 @@ def main() -> None:
         parser.error("--forehead-ratio must be between 0 and 0.5")
     if args.temporal_window < 1 or args.temporal_window % 2 == 0:
         parser.error("--temporal-window must be a positive odd number")
-    build_mask_video(args.source, args.output, args.forehead_ratio, args.temporal_window)
+    build_mask_video(
+        args.source,
+        args.output,
+        args.masked_video_output,
+        args.forehead_ratio,
+        args.temporal_window,
+    )
 
 
 if __name__ == "__main__":
