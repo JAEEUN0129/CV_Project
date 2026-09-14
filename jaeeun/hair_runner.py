@@ -10,10 +10,17 @@ Usage:
 """
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
+from PIL import Image
+
+# A sibling module, imported by its own name: the script's folder is first on sys.path, so
+# this does not go through the jaeeun package and pulls in nothing from the main project.
+import frame_align
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 
@@ -145,6 +152,20 @@ def main() -> None:
         help="Skip writing the hair mask. It is free to produce and needed by every "
         "post-processing step, so leave it on unless disk space is tight.",
     )
+    parser.add_argument(
+        "--stabilise-sigma",
+        type=float,
+        default=0.5,
+        help="Temporal smoothing of the face landmarks, in frames. 0 aligns every frame on "
+        "its own. See frame_align.smooth_landmarks for the sweep behind the default.",
+    )
+    parser.add_argument(
+        "--max-gap",
+        type=int,
+        default=6,
+        help="Longest run of frames without a detected face that is bridged by "
+        "interpolation. Longer absences are held on the last result instead.",
+    )
     options = parser.parse_args()
 
     shape = options.shape or options.reference
@@ -159,24 +180,40 @@ def main() -> None:
         print("ERROR no input images found", flush=True)
         sys.exit(1)
 
-    if options.check_only:
-        # Only the landmark detector is needed, so this stays in the seconds range.
-        sys.path.insert(0, str(options.repo.resolve()))
-        from utils.shape_predictor import align_face
-        from torchvision.io import read_image, ImageReadMode
+    detector, predictor = frame_align.load_detector(
+        options.weights.resolve() / "ShapeAdaptor" / "shape_predictor_68_face_landmarks.dat"
+    )
 
+    if options.check_only:
+        # Only the landmark detector is needed, so this stays in the seconds range. A frame
+        # counts as usable if it will be generated: detected, or inside a gap short enough
+        # to interpolate. Held frames reuse a neighbour's result, so they are the ones worth
+        # telling the user how to reshoot.
         print(f"TOTAL {len(faces)}", flush=True)
-        usable = 0
+        landmarks = []
         for index, face in enumerate(faces):
-            try:
-                align_face([read_image(str(face), mode=ImageReadMode.RGB)])
+            landmarks.append(frame_align.detect_landmarks(Image.open(face), detector, predictor))
+            print(f"PROGRESS {index + 1} {len(faces)}", flush=True)
+        _, status = frame_align.fill_gaps(landmarks, options.max_gap)
+        usable = 0
+        for face, state in zip(faces, status):
+            if state == frame_align.HELD:
+                print(f"UNUSABLE {face.name}", flush=True)
+            else:
                 usable += 1
                 print(f"USABLE {face.name}", flush=True)
-            except Exception:
-                print(f"UNUSABLE {face.name}", flush=True)
-            print(f"PROGRESS {index + 1} {len(faces)}", flush=True)
         print(f"COMPLETED {usable}", flush=True)
         sys.exit(0 if usable else 2)
+
+    # The model now receives crops aligned here rather than aligning with align=True, so
+    # the references need the same treatment. Failing on them is an input problem the user
+    # can fix, not something to discover as every frame failing one by one.
+    try:
+        shape_image = frame_align.align_one(Image.open(shape), detector, predictor)
+        color_image = shape_image if color == shape else frame_align.align_one(Image.open(color), detector, predictor)
+    except ValueError:
+        print("ERROR no face found in the shape or colour reference image", flush=True)
+        sys.exit(1)
 
     device = choose_device()
     print(f"DEVICE {device}", flush=True)
@@ -188,24 +225,69 @@ def main() -> None:
 
     from torchvision.utils import save_image
 
+    # Align the whole clip before generating anything: smoothing needs every frame's
+    # landmarks, and a gap can only be interpolated once the frame after it is known.
+    aligned = frame_align.align_clip(
+        [Image.open(face) for face in faces], detector, predictor,
+        sigma=options.stabilise_sigma, max_gap=options.max_gap,
+    )
+
+    def copy_outputs(source_stem: str, target_stem: str) -> None:
+        for suffix in ("", "_aligned", "_mask"):
+            source = options.output / f"{source_stem}{suffix}.png"
+            if source.exists():
+                shutil.copy(source, options.output / f"{target_stem}{suffix}.png")
+
+    # Every input frame gets an output. Dropping the ones without a face used to shorten
+    # the clip and splice its two sides together, which played as a jump; holding the last
+    # result keeps the timeline, so the sound track can stay too.
+    quads = np.full((len(faces), 4, 2), np.nan)
     completed = 0
-    for index, face in enumerate(faces):
+    last_done = None
+    waiting = []  # frames before the first result, filled in once there is one
+    for index, (face, (crop, quad, state)) in enumerate(zip(faces, aligned)):
+        if crop is None:
+            print(f"HELD {face.name}", flush=True)
+            if last_done:
+                copy_outputs(last_done, face.stem)
+            else:
+                waiting.append(face.stem)
+            print(f"PROGRESS {index + 1} {len(faces)}", flush=True)
+            continue
+
+        if state == frame_align.INTERPOLATED:
+            print(f"INTERPOLATED {face.name}", flush=True)
         try:
             with torch.no_grad():
-                # align=True crops each face to the 1024px layout the model was trained
-                # on, and raises when no face is found — which is the expected outcome
-                # once the subject turns away, not an error worth aborting the run for.
-                result, aligned, *_ = model.swap(face, shape, color, align=True, seed=options.seed)
+                result = model.swap(crop, shape_image, color_image, align=False, seed=options.seed)
             save_image(result, options.output / f"{face.stem}.png")
-            save_image(aligned, options.output / f"{face.stem}_aligned.png")
+            crop.save(options.output / f"{face.stem}_aligned.png")
             if not options.no_mask:
                 mask = hair_mask_of(result, options.repo)
                 save_image(mask, options.output / f"{face.stem}_mask.png")
+            quads[index] = quad
             completed += 1
             print(f"OK {face.name}", flush=True)
+            for stem in waiting:
+                copy_outputs(face.stem, stem)
+            waiting.clear()
+            last_done = face.stem
         except Exception as error:
+            # Still reported as SKIP, but held like a faceless frame so the clip keeps
+            # its length.
             print(f"SKIP {face.name} {type(error).__name__}: {str(error)[:80]}", flush=True)
+            if last_done:
+                copy_outputs(last_done, face.stem)
+            else:
+                waiting.append(face.stem)
         print(f"PROGRESS {index + 1} {len(faces)}", flush=True)
+
+    # Where each crop came from in its source frame, for putting the result back into the
+    # original picture later. Held frames stay NaN: they have no crop of their own.
+    np.save(options.output / "quads.npy", quads)
+    (options.output / "frame_status.txt").write_text(
+        "\n".join(f"{face.name} {state}" for face, (_, _, state) in zip(faces, aligned)) + "\n"
+    )
 
     print(f"COMPLETED {completed}", flush=True)
     if not completed:

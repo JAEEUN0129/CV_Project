@@ -78,7 +78,7 @@ class HairstyleTransfer:
         ]
 
     def _run(self, command: list[str], on_progress: Callable[[int, int], None] | None):
-        skipped, transcript = [], []
+        skipped, held, transcript = [], [], []
         with subprocess.Popen(
             command,
             cwd=str(self.environment.repo.resolve()),
@@ -95,7 +95,10 @@ class HairstyleTransfer:
                     on_progress(int(done), int(total))
                 elif line.startswith(("SKIP ", "UNUSABLE ")):
                     skipped.append(line.split()[1])
+                elif line.startswith("HELD "):
+                    held.append(line.split()[1])
             code = worker.wait()
+        self.last_held = held
         return code, skipped, transcript
 
     def check_frames(
@@ -132,8 +135,10 @@ class HairstyleTransfer:
         given; without it the shape photo's colour comes along too, which is why choosing a
         bob used to force the reference's blonde.
 
-        Images the face detector cannot handle are skipped rather than failing the run,
-        because a subject who turns away mid-clip is normal input, not a fault.
+        A subject who turns away mid-clip is normal input, not a fault. Short stretches
+        without a detectable face are interpolated; longer ones repeat the last result, so
+        one output comes back per input frame and the clip keeps its length. The frames that
+        were repeated are left in ``last_held``.
         """
         missing = self.environment.missing_parts()
         if missing:
