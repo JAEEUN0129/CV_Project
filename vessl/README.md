@@ -245,6 +245,25 @@ HairCLIP 결과를 `style.png`로 올려 VACE 자체의 성능만 분리해 검�
 14B를 돌려 품질 차이를 비교한다. 14B는 공식 예시가 8 GPU 분산 실행을 기준으로 하므로,
 단일 L4에서 바로 시작하지 않는다.
 
+### 4개 스타일과 앞머리 분기 실행
+
+`run_vace_style.sh`는 스타일 번호에 따라 참조 이미지·프롬프트·마스크를 선택한다.
+
+```bash
+cd /root/CV_Project
+bash vessl/run_vace_style.sh 1  # 긴 생머리
+bash vessl/run_vace_style.sh 2  # 긴 웨이브
+bash vessl/run_vace_style.sh 3  # 앞머리 웨이브
+bash vessl/run_vace_style.sh 4  # 짧은 머리
+```
+
+앞머리가 없는 1·2·4번은 `/root/vace-test/hair-mask.png`를 그대로 쓴다. 3번은
+`prepare_vace_mask.py`가 첫 프레임의 얼굴을 분할한 뒤 이마 상단 28%만 추가한
+`hair-mask-bangs.png`를 생성한다. 모든 방향을 넓히는 `maskaug_ratio`는 쓰지 않는다.
+
+필요하면 앞머리 깊이를 스크립트의 `--forehead-ratio 0.28`에서 조절한다. 눈썹이나 눈이
+변하면 값을 낮추고, 앞머리가 너무 짧으면 값을 조금 높인다.
+
 ---
 
 ## 걸렸던 문제와 원인

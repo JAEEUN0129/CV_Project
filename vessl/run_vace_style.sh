@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STYLE_ID="${1:-}"
+TEST_DIR="${VACE_TEST_DIR:-/root/vace-test}"
+VACE_DIR="${VACE_DIR:-/root/VACE}"
+MODEL_DIR="${VACE_MODEL_DIR:-/root/models/Wan2.1-VACE-1.3B}"
+PROJECT_DIR="${PROJECT_DIR:-/root/CV_Project}"
+
+case "$STYLE_ID" in
+  1)
+    STYLE_IMAGE="$TEST_DIR/style1.jpg"
+    EDIT_MASK="$TEST_DIR/hair-mask.png"
+    PROMPT="A photorealistic video of the same person from the source video with long straight hair matching the reference image. Preserve her identity, eyes, eyebrows, nose, mouth, facial expression, clothing, pose, lighting, camera motion, and background. Change only the hair, with natural strands and temporally consistent motion."
+    ;;
+  2)
+    STYLE_IMAGE="$TEST_DIR/style2.png"
+    EDIT_MASK="$TEST_DIR/hair-mask.png"
+    PROMPT="A photorealistic video of the same person from the source video with long voluminous wavy hair matching the reference image. Preserve her identity, eyes, eyebrows, nose, mouth, facial expression, clothing, pose, lighting, camera motion, and background. Change only the hair, with natural strands and temporally consistent waves."
+    ;;
+  3)
+    STYLE_IMAGE="$TEST_DIR/style3.jpg"
+    EDIT_MASK="$TEST_DIR/hair-mask-bangs.png"
+    cd "$PROJECT_DIR"
+    python -m jaeeun.prepare_vace_mask \
+      --source "$TEST_DIR/source.mp4" \
+      --base-mask "$TEST_DIR/hair-mask.png" \
+      --output "$EDIT_MASK" \
+      --bangs \
+      --forehead-ratio 0.28
+    PROMPT="A photorealistic video of the same person from the source video with shoulder-length blonde wavy hair and full straight blunt bangs clearly covering the forehead, matching the reference image. Preserve her identity, eyes, eyebrows, nose, mouth, facial expression, clothing, pose, lighting, camera motion, and background. Change only the hair, with natural strands and temporally consistent motion."
+    ;;
+  4)
+    STYLE_IMAGE="$TEST_DIR/style4.png"
+    EDIT_MASK="$TEST_DIR/hair-mask.png"
+    PROMPT="A photorealistic video of the same person from the source video with a short hairstyle matching the reference image. Remove the original long hair inside the editable region and naturally reconstruct the revealed background, neck, and clothing. Preserve her identity, eyes, eyebrows, nose, mouth, facial expression, clothing, pose, lighting, camera motion, and background. Change only the hair, with temporally consistent motion."
+    ;;
+  *)
+    echo "Usage: bash $0 {1|2|3|4}" >&2
+    exit 2
+    ;;
+esac
+
+for required in "$TEST_DIR/source.mp4" "$TEST_DIR/hair-mask.png" "$STYLE_IMAGE" "$MODEL_DIR"; do
+  if [[ ! -e "$required" ]]; then
+    echo "Missing required input: $required" >&2
+    exit 1
+  fi
+done
+
+mkdir -p /root/pip-tmp /root/pip-cache
+export TMPDIR=/root/pip-tmp
+export PIP_CACHE_DIR=/root/pip-cache
+
+cd "$VACE_DIR"
+python vace/vace_pipeline.py \
+  --base wan \
+  --task swap_anything \
+  --mode masktrack,plain \
+  --video "$TEST_DIR/source.mp4" \
+  --mask "$EDIT_MASK" \
+  --image "$STYLE_IMAGE" \
+  --ckpt_dir "$MODEL_DIR" \
+  --prompt "$PROMPT"
+
+echo "Style $STYLE_ID finished. Results are under $VACE_DIR/results."
