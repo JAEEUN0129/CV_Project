@@ -2,6 +2,7 @@
 set -euo pipefail
 
 STYLE_ID="${1:-}"
+BANGS_STYLE="${2:-straight}"
 TEST_DIR="${VACE_TEST_DIR:-/root/vace-test}"
 VACE_DIR="${VACE_DIR:-/root/VACE}"
 MODEL_DIR="${VACE_MODEL_DIR:-/root/models/Wan2.1-VACE-1.3B}"
@@ -28,6 +29,22 @@ case "$STYLE_ID" in
     PROMPT="A photorealistic video of the same person from the source video with long voluminous wavy hair matching the reference image. The hair has clearly defined soft S-shaped waves from the mid-lengths continuously through the lower lengths and ends; the bottom sections and tips remain visibly wavy and full, never straight or flat. Preserve her identity, eyes, eyebrows, nose, mouth, facial expression, clothing, pose, lighting, camera motion, and background. Change only the hair, with natural strands and temporally consistent waves."
     ;;
   3)
+    case "$BANGS_STYLE" in
+      straight)
+        STYLE_PHRASE="full straight bangs"
+        ;;
+      choppy)
+        STYLE_PHRASE="short choppy bangs"
+        ;;
+      side)
+        STYLE_PHRASE="side-swept bangs"
+        ;;
+      *)
+        echo "Unknown bangs style: $BANGS_STYLE" >&2
+        echo "Usage: bash $0 3 {straight|choppy|side}" >&2
+        exit 2
+        ;;
+    esac
     STYLE_IMAGE="$TEST_DIR/style3.jpg"
     EDIT_MASK="$TEST_DIR/hair-mask-bangs.mp4"
     MASKED_VIDEO="$TEST_DIR/source-bangs-masked.mp4"
@@ -39,7 +56,7 @@ case "$STYLE_ID" in
       --forehead-ratio 0.28 \
       --temporal-window 3
     DIRECT_INFERENCE=1
-    PROMPT="A photorealistic video of the same person from the source video with shoulder-length blonde wavy hair and full straight blunt bangs clearly covering the forehead, matching the reference image. Preserve her identity, eyes, eyebrows, nose, mouth, facial expression, clothing, pose, lighting, camera motion, and background. Change only the hair, with natural strands and temporally consistent motion."
+    PROMPT="Edit this video so that the person has $STYLE_PHRASE. Change only the bangs area in every frame. Keep the rest of the hairstyle, overall hair length, hair color, face identity, skin, glasses, clothing, pose, lighting, camera motion, and background unchanged. Make the new bangs clearly recognizable, natural-looking, and temporally consistent throughout the video."
     ;;
   4)
     STYLE_IMAGE="$TEST_DIR/style4.png"
