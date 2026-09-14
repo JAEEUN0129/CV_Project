@@ -6,6 +6,7 @@ TEST_DIR="${VACE_TEST_DIR:-/root/vace-test}"
 VACE_DIR="${VACE_DIR:-/root/VACE}"
 MODEL_DIR="${VACE_MODEL_DIR:-/root/models/Wan2.1-VACE-1.3B}"
 PROJECT_DIR="${PROJECT_DIR:-/root/CV_Project}"
+DIRECT_INFERENCE=0
 
 case "$STYLE_ID" in
   1)
@@ -28,14 +29,14 @@ case "$STYLE_ID" in
     ;;
   3)
     STYLE_IMAGE="$TEST_DIR/style3.jpg"
-    EDIT_MASK="$TEST_DIR/hair-mask-bangs.png"
+    EDIT_MASK="$TEST_DIR/hair-mask-bangs.mp4"
     cd "$PROJECT_DIR"
-    python -m jaeeun.prepare_vace_mask \
+    python -m jaeeun.prepare_vace_mask_video \
       --source "$TEST_DIR/source.mp4" \
-      --base-mask "$TEST_DIR/hair-mask.png" \
       --output "$EDIT_MASK" \
-      --bangs \
-      --forehead-ratio 0.28
+      --forehead-ratio 0.28 \
+      --temporal-window 3
+    DIRECT_INFERENCE=1
     PROMPT="A photorealistic video of the same person from the source video with shoulder-length blonde wavy hair and full straight blunt bangs clearly covering the forehead, matching the reference image. Preserve her identity, eyes, eyebrows, nose, mouth, facial expression, clothing, pose, lighting, camera motion, and background. Change only the hair, with natural strands and temporally consistent motion."
     ;;
   4)
@@ -61,14 +62,23 @@ export TMPDIR=/root/pip-tmp
 export PIP_CACHE_DIR=/root/pip-cache
 
 cd "$VACE_DIR"
-python vace/vace_pipeline.py \
-  --base wan \
-  --task swap_anything \
-  --mode masktrack,plain \
-  --video "$TEST_DIR/source.mp4" \
-  --mask "$EDIT_MASK" \
-  --image "$STYLE_IMAGE" \
-  --ckpt_dir "$MODEL_DIR" \
-  --prompt "$PROMPT"
+if [[ "$DIRECT_INFERENCE" == "1" ]]; then
+  python vace/vace_wan_inference.py \
+    --ckpt_dir "$MODEL_DIR" \
+    --src_video "$TEST_DIR/source.mp4" \
+    --src_mask "$EDIT_MASK" \
+    --src_ref_images "$STYLE_IMAGE" \
+    --prompt "$PROMPT"
+else
+  python vace/vace_pipeline.py \
+    --base wan \
+    --task swap_anything \
+    --mode masktrack,plain \
+    --video "$TEST_DIR/source.mp4" \
+    --mask "$EDIT_MASK" \
+    --image "$STYLE_IMAGE" \
+    --ckpt_dir "$MODEL_DIR" \
+    --prompt "$PROMPT"
+fi
 
 echo "Style $STYLE_ID finished. Results are under $VACE_DIR/results."
