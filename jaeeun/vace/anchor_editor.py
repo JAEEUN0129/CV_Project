@@ -33,6 +33,7 @@ class ManualAnchorEditor:
 class FluxAnchorEditor:
     python: Path
     worker: Path
+    cpu_offload: bool = True
 
     def create(
         self, source: Path, reference: Path, mask: Path | None, prompt: str, output: Path
@@ -47,6 +48,8 @@ class FluxAnchorEditor:
             "--prompt", prompt,
             "--output", str(output),
         ]
+        if self.cpu_offload:
+            command.append("--cpu-offload")
         subprocess.run(command, check=True)
         if not output.is_file():
             raise RuntimeError(f"FLUX worker did not create {output}")
