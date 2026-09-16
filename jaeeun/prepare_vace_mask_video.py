@@ -29,6 +29,7 @@ def _frame_mask(
     side_short_ratio: float = 0.15,
     side_long_ratio: float = 0.45,
     side_direction: str = "right",
+    edit_type: str = "bangs",
 ) -> np.ndarray | None:
     ids = _normalise_labels(labels)
     if "hair" not in ids or "face" not in ids:
@@ -39,6 +40,12 @@ def _frame_mask(
     ys, xs = np.where(face)
     if not hair.any() or not len(ys):
         return None
+
+    if edit_type == "short_hair":
+        return hair
+    if edit_type == "wave":
+        expanded = cv2.dilate(hair.astype(np.uint8), np.ones((31, 61), np.uint8)) > 0
+        return hair | (expanded & ~face)
 
     face_top, face_bottom = int(ys.min()), int(ys.max())
     rows, columns = np.indices(face.shape)
@@ -93,6 +100,7 @@ def build_mask_video(
     side_short_ratio: float = 0.15,
     side_long_ratio: float = 0.45,
     side_direction: str = "right",
+    edit_type: str = "bangs",
 ) -> Path:
     capture = cv2.VideoCapture(str(source))
     if not capture.isOpened():
@@ -121,6 +129,7 @@ def build_mask_video(
                     side_short_ratio,
                     side_long_ratio,
                     side_direction,
+                    edit_type,
                 )
             )
     capture.release()
@@ -184,6 +193,11 @@ def main() -> None:
     parser.add_argument("--side-short-ratio", type=float, default=0.15)
     parser.add_argument("--side-long-ratio", type=float, default=0.45)
     parser.add_argument("--side-direction", choices=("left", "right"), default="right")
+    parser.add_argument(
+        "--edit-type",
+        choices=("bangs", "see_through_bangs", "short_hair", "remove_bangs", "wave"),
+        default="bangs",
+    )
     parser.add_argument("--temporal-window", type=int, default=3)
     args = parser.parse_args()
     if not 0 <= args.forehead_ratio <= 0.5:
@@ -202,6 +216,7 @@ def main() -> None:
         args.side_short_ratio,
         args.side_long_ratio,
         args.side_direction,
+        args.edit_type,
     )
 
 
