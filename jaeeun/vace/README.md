@@ -42,6 +42,12 @@ Add `--dry-run` to create the anchor copy and `experiment.json` without starting
 GPU inference. Supported edit contracts are `see_through_bangs`, `short_hair`,
 `remove_bangs`, and `wave`.
 
+For `short_hair`, automatic mask generation parses both the original video and
+the same-person short-hair anchor. It aligns the anchor hair to each frame using
+the parsed face bounding box and uses `old_hair | aligned_anchor_hair` as the
+edit mask. The union includes both the long hair that must be erased and the
+space where the target short hairstyle must be generated.
+
 ## FLUX adapter contract
 
 ```bash

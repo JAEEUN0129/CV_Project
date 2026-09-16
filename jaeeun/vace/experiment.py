@@ -10,6 +10,7 @@ from .anchor_editor import FluxAnchorEditor, ManualAnchorEditor
 from .anchor_mask import build_anchor_mask
 from .anchor_selector import select_anchor
 from .runner import VaceRun
+from .short_hair_mask import build_short_hair_mask_video
 from .specs import EDIT_SPECS
 from ..prepare_vace_mask_video import build_mask_video
 
@@ -45,21 +46,6 @@ def main() -> None:
 
     spec = EDIT_SPECS[args.edit_type]
     args.workspace.mkdir(parents=True, exist_ok=True)
-    mask_video = args.mask_video or args.workspace / f"mask-{args.edit_type}.mp4"
-    masked_video = args.masked_video or args.workspace / f"source-masked-{args.edit_type}.mp4"
-    if args.mask_video is None or args.masked_video is None:
-        ratio = {
-            "see_through_bangs": 0.32,
-            "remove_bangs": 0.25,
-        }.get(args.edit_type, 0.28)
-        build_mask_video(
-            args.source,
-            mask_video,
-            masked_video,
-            forehead_ratio=ratio,
-            temporal_window=3,
-            edit_type=args.edit_type,
-        )
     selected_frame = args.workspace / "source-anchor-frame.png"
     selected = select_anchor(args.source, selected_frame)
     final_anchor = args.workspace / f"anchor-{args.edit_type}.png"
@@ -76,6 +62,27 @@ def main() -> None:
             build_anchor_mask(selected_frame, anchor_mask, args.edit_type)
         editor = FluxAnchorEditor(args.flux_python, args.flux_worker)
     editor.create(selected_frame, args.style_reference, anchor_mask, spec.prompt, final_anchor)
+
+    mask_video = args.mask_video or args.workspace / f"mask-{args.edit_type}.mp4"
+    masked_video = args.masked_video or args.workspace / f"source-masked-{args.edit_type}.mp4"
+    if args.mask_video is None or args.masked_video is None:
+        if args.edit_type == "short_hair":
+            build_short_hair_mask_video(
+                args.source, final_anchor, mask_video, masked_video, temporal_window=3
+            )
+        else:
+            ratio = {
+                "see_through_bangs": 0.32,
+                "remove_bangs": 0.25,
+            }.get(args.edit_type, 0.28)
+            build_mask_video(
+                args.source,
+                mask_video,
+                masked_video,
+                forehead_ratio=ratio,
+                temporal_window=3,
+                edit_type=args.edit_type,
+            )
 
     run = VaceRun(
         repo=args.vace_repo,
