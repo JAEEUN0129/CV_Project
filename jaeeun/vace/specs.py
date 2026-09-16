@@ -24,6 +24,17 @@ EDIT_SPECS = {
             "same hairstyle temporally consistent in every frame."
         ),
     ),
+    "curtain_bangs": EditSpec(
+        name="curtain_bangs",
+        mask_strategy="symmetric_side_bangs",
+        prompt=(
+            "Apply natural center-parted curtain bangs from the anchor image. Keep a visible "
+            "centre part and make the fringe flow symmetrically down both sides of the forehead "
+            "toward the temples. Preserve the exact identity, face, existing hair length and "
+            "color, expression, clothing, lighting, camera motion, and background. Keep the "
+            "curtain bangs temporally consistent in every frame."
+        ),
+    ),
     "short_hair": EditSpec(
         name="short_hair",
         mask_strategy="remove_old_hair",

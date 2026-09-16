@@ -20,7 +20,7 @@ def build_anchor_mask(source: Path, output: Path, edit_type: str) -> Path:
     hair = class_map == ids["hair"]
     result = hair.copy()
 
-    if edit_type in {"see_through_bangs", "remove_bangs"}:
+    if edit_type in {"see_through_bangs", "curtain_bangs", "remove_bangs"}:
         if "face" not in ids:
             raise ValueError("Human parser does not provide a face class")
         face = class_map == ids["face"]
@@ -28,9 +28,21 @@ def build_anchor_mask(source: Path, output: Path, edit_type: str) -> Path:
         if not len(ys):
             raise ValueError("No face was detected in the selected anchor frame")
         face_top, face_bottom = int(ys.min()), int(ys.max())
-        ratio = 0.32 if edit_type == "see_through_bangs" else 0.25
-        forehead_bottom = face_top + round((face_bottom - face_top + 1) * ratio)
-        result |= face & (np.indices(face.shape)[0] <= forehead_bottom)
+        rows, columns = np.indices(face.shape)
+        if edit_type == "curtain_bangs":
+            _, xs = np.where(face)
+            face_left, face_right = int(xs.min()), int(xs.max())
+            normalised_x = np.clip(
+                (columns - face_left) / max(1, face_right - face_left), 0.0, 1.0
+            )
+            distance_from_centre = np.abs(normalised_x - 0.5) * 2.0
+            depth = 0.12 + (0.42 - 0.12) * distance_from_centre
+            forehead_bottom = face_top + (face_bottom - face_top + 1) * depth
+            result |= face & (rows <= forehead_bottom)
+        else:
+            ratio = 0.32 if edit_type == "see_through_bangs" else 0.25
+            forehead_bottom = face_top + round((face_bottom - face_top + 1) * ratio)
+            result |= face & (rows <= forehead_bottom)
     elif edit_type == "wave":
         expanded = cv2.dilate(hair.astype(np.uint8), np.ones((31, 61), np.uint8)) > 0
         if "face" in ids:
@@ -50,7 +62,13 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--edit-type",
-        choices=("see_through_bangs", "short_hair", "remove_bangs", "wave"),
+        choices=(
+            "see_through_bangs",
+            "curtain_bangs",
+            "short_hair",
+            "remove_bangs",
+            "wave",
+        ),
         required=True,
     )
     args = parser.parse_args()

@@ -49,14 +49,22 @@ def _frame_mask(
 
     face_top, face_bottom = int(ys.min()), int(ys.max())
     rows, columns = np.indices(face.shape)
-    if bangs_style == "side":
+    if bangs_style in {"side", "curtain"}:
         face_left, face_right = int(xs.min()), int(xs.max())
         normalised_x = np.clip(
             (columns - face_left) / max(1, face_right - face_left), 0.0, 1.0
         )
-        if side_direction == "left":
-            normalised_x = 1.0 - normalised_x
-        depth = side_short_ratio + (side_long_ratio - side_short_ratio) * normalised_x
+        if bangs_style == "curtain":
+            # Keep the centre part shallow and extend symmetrically down both
+            # sides of the forehead, matching two-sided curtain bangs.
+            distance_from_centre = np.abs(normalised_x - 0.5) * 2.0
+            depth = side_short_ratio + (
+                side_long_ratio - side_short_ratio
+            ) * distance_from_centre
+        else:
+            if side_direction == "left":
+                normalised_x = 1.0 - normalised_x
+            depth = side_short_ratio + (side_long_ratio - side_short_ratio) * normalised_x
         forehead_bottom = face_top + (face_bottom - face_top + 1) * depth
         forehead = face & (rows <= forehead_bottom)
     else:
@@ -188,14 +196,25 @@ def main() -> None:
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--masked-video-output", type=Path)
-    parser.add_argument("--bangs-style", choices=("straight", "choppy", "side"), default="straight")
+    parser.add_argument(
+        "--bangs-style",
+        choices=("straight", "choppy", "side", "curtain"),
+        default="straight",
+    )
     parser.add_argument("--forehead-ratio", type=float, default=0.28)
     parser.add_argument("--side-short-ratio", type=float, default=0.15)
     parser.add_argument("--side-long-ratio", type=float, default=0.45)
     parser.add_argument("--side-direction", choices=("left", "right"), default="right")
     parser.add_argument(
         "--edit-type",
-        choices=("bangs", "see_through_bangs", "short_hair", "remove_bangs", "wave"),
+        choices=(
+            "bangs",
+            "see_through_bangs",
+            "curtain_bangs",
+            "short_hair",
+            "remove_bangs",
+            "wave",
+        ),
         default="bangs",
     )
     parser.add_argument("--temporal-window", type=int, default=3)

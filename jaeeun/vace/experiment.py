@@ -75,12 +75,14 @@ def main() -> None:
                 "see_through_bangs": 0.32,
                 "remove_bangs": 0.25,
             }.get(args.edit_type, 0.28)
+            bangs_style = "curtain" if args.edit_type == "curtain_bangs" else "straight"
             build_mask_video(
                 args.source,
                 mask_video,
                 masked_video,
                 forehead_ratio=ratio,
                 temporal_window=3,
+                bangs_style=bangs_style,
                 edit_type=args.edit_type,
             )
 
