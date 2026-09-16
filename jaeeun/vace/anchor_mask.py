@@ -20,7 +20,29 @@ def build_anchor_mask(source: Path, output: Path, edit_type: str) -> Path:
     hair = class_map == ids["hair"]
     result = hair.copy()
 
-    if edit_type in {"see_through_bangs", "curtain_bangs", "remove_bangs"}:
+    if edit_type == "short_hair":
+        # Removing long hair requires enough editable context for the image
+        # model to reconstruct the revealed neck, clothes, and background.
+        # Expand outside the old silhouette while keeping the parsed face fixed.
+        hair_height, hair_width = hair.shape
+        face = class_map == ids["face"] if "face" in ids else np.zeros_like(hair)
+        face_ys, face_xs = np.where(face)
+        scale_width = int(face_xs.max() - face_xs.min() + 1) if len(face_xs) else hair_width // 3
+        scale_height = int(face_ys.max() - face_ys.min() + 1) if len(face_ys) else hair_height // 3
+        kernel_width = max(15, round(scale_width * 0.18)) | 1
+        kernel_height = max(15, round(scale_height * 0.14)) | 1
+        kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (kernel_width, kernel_height)
+        )
+        expanded = cv2.dilate(hair.astype(np.uint8), kernel) > 0
+
+        # Give the lower ends extra room because those pixels must become neck,
+        # clothing, or background rather than another copy of the long hair.
+        lower_kernel_height = max(11, round(scale_height * 0.10)) | 1
+        lower_kernel = np.ones((lower_kernel_height, 3), dtype=np.uint8)
+        expanded |= cv2.dilate(hair.astype(np.uint8), lower_kernel) > 0
+        result = expanded & ~face
+    elif edit_type in {"see_through_bangs", "curtain_bangs", "remove_bangs"}:
         if "face" not in ids:
             raise ValueError("Human parser does not provide a face class")
         face = class_map == ids["face"]
