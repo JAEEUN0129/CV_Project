@@ -53,6 +53,8 @@ def build_short_hair_mask_video(
     output: Path,
     masked_video_output: Path,
     temporal_window: int = 3,
+    target_output: Path | None = None,
+    target_anchor_output: Path | None = None,
 ) -> Path:
     parser = HumanParser()
     anchor_map, anchor_labels = parser.predict(anchor)
@@ -74,6 +76,7 @@ def build_short_hair_mask_video(
         )
 
     masks: list[np.ndarray | None] = []
+    target_masks: list[np.ndarray | None] = []
     with tempfile.TemporaryDirectory(prefix="vace-short-") as temp_dir:
         frame_path = Path(temp_dir) / "frame.png"
         while True:
@@ -87,13 +90,22 @@ def build_short_hair_mask_video(
             frame_face_box = _bbox(frame_face)
             if not old_hair.any() or frame_face_box is None:
                 masks.append(None)
+                target_masks.append(None)
                 continue
             new_hair = _align_target_hair(target_hair, target_face_box, frame_face_box)
             masks.append(old_hair | new_hair)
+            target_masks.append(new_hair)
     capture.release()
     if not masks:
         raise ValueError(f"Video contains no readable frames: {source}")
     masks = _temporal_median(_fill_missing(masks), temporal_window)
+    target_masks = _temporal_median(_fill_missing(target_masks), temporal_window)
+
+    if target_anchor_output is not None:
+        target_anchor_output.parent.mkdir(parents=True, exist_ok=True)
+        anchor_mask = np.where(target_hair, 255, 0).astype(np.uint8)
+        if not cv2.imwrite(str(target_anchor_output), anchor_mask):
+            raise ValueError(f"Could not create target anchor mask {target_anchor_output}")
 
     output.parent.mkdir(parents=True, exist_ok=True)
     writer = cv2.VideoWriter(
@@ -104,27 +116,49 @@ def build_short_hair_mask_video(
     masked_writer = cv2.VideoWriter(
         str(masked_video_output), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height), True
     )
-    if not writer.isOpened() or not source_capture.isOpened() or not masked_writer.isOpened():
+    target_writer = None
+    if target_output is not None:
+        target_output.parent.mkdir(parents=True, exist_ok=True)
+        target_writer = cv2.VideoWriter(
+            str(target_output), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height), True
+        )
+    if (
+        not writer.isOpened()
+        or not source_capture.isOpened()
+        or not masked_writer.isOpened()
+        or (target_writer is not None and not target_writer.isOpened())
+    ):
         writer.release()
         source_capture.release()
         masked_writer.release()
+        if target_writer is not None:
+            target_writer.release()
         raise ValueError("Could not create short-hair mask outputs")
     written = 0
-    for mask in masks:
+    for mask, target_mask in zip(masks, target_masks):
         ok, frame = source_capture.read()
         if not ok:
             break
         mask_frame = np.where(mask, 255, 0).astype(np.uint8)
         writer.write(cv2.cvtColor(mask_frame, cv2.COLOR_GRAY2BGR))
+        if target_writer is not None:
+            target_frame = np.where(target_mask, 255, 0).astype(np.uint8)
+            target_writer.write(cv2.cvtColor(target_frame, cv2.COLOR_GRAY2BGR))
         frame[mask] = 128
         masked_writer.write(frame)
         written += 1
     writer.release()
     source_capture.release()
     masked_writer.release()
+    if target_writer is not None:
+        target_writer.release()
     if written != len(masks):
         raise ValueError(f"Wrote {written} frames, expected {len(masks)}")
     print(f"Wrote {written} old-hair union anchor-hair mask frames to {output}")
+    if target_output is not None:
+        print(f"Wrote {written} target short-hair silhouette frames to {target_output}")
+    if target_anchor_output is not None:
+        print(f"Wrote target short-hair anchor silhouette to {target_anchor_output}")
     print(f"Wrote {written} masked source frames to {masked_video_output}")
     return output
 
@@ -135,12 +169,20 @@ def main() -> None:
     parser.add_argument("--anchor", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--masked-video-output", type=Path, required=True)
+    parser.add_argument("--target-output", type=Path)
+    parser.add_argument("--target-anchor-output", type=Path)
     parser.add_argument("--temporal-window", type=int, default=3)
     args = parser.parse_args()
     if args.temporal_window < 1 or args.temporal_window % 2 == 0:
         parser.error("--temporal-window must be a positive odd number")
     build_short_hair_mask_video(
-        args.source, args.anchor, args.output, args.masked_video_output, args.temporal_window
+        args.source,
+        args.anchor,
+        args.output,
+        args.masked_video_output,
+        args.temporal_window,
+        args.target_output,
+        args.target_anchor_output,
     )
 
 

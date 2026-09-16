@@ -68,7 +68,13 @@ def main() -> None:
     if args.mask_video is None or args.masked_video is None:
         if args.edit_type == "short_hair":
             build_short_hair_mask_video(
-                args.source, final_anchor, mask_video, masked_video, temporal_window=3
+                args.source,
+                final_anchor,
+                mask_video,
+                masked_video,
+                temporal_window=3,
+                target_output=args.workspace / "target-mask-short_hair.mp4",
+                target_anchor_output=args.workspace / "anchor-target-mask-short_hair.png",
             )
         else:
             ratio = {
