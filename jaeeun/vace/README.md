@@ -6,8 +6,10 @@ editor can be changed without rewriting the VACE stage.
 ## Current status
 
 - `manual`: ready. Copies an already approved anchor image.
-- `flux`: FLUX.1 Kontext reference-guided inpainting worker included. It requires
-  a separately installed environment and accepted Hugging Face model access.
+- `flux`: FLUX.2 Klein 4B reference-guided inpainting worker included. It passes
+  the selected source frame, hairstyle reference, and edit mask to the dedicated
+  inpainting pipeline, then composites only the allowed mask region back over
+  the original source.
 - VACE: ready for prebuilt frame-aligned `mask-video` and `masked-video` inputs.
 - Final hair-only compositing: not implemented yet.
 
@@ -72,6 +74,6 @@ pip install --index-url https://download.pytorch.org/whl/cu124 \
 pip install -r /root/CV_Project/jaeeun/requirements-flux.txt
 ```
 
-The model is gated; authenticate with Hugging Face and accept its license before
-the first download. The worker belongs in the isolated FLUX environment, not the
-working VACE Python environment.
+The default model is `black-forest-labs/FLUX.2-klein-4B`. It is downloaded on
+first use and cached by Hugging Face. The worker belongs in the isolated FLUX
+environment, not the working VACE Python environment.
