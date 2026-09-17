@@ -43,10 +43,11 @@ EDIT_SPECS = {
             "Replace the long hairstyle with a clearly short haircut matching only the haircut "
             "shape of the reference image. The haircut must end above the jawline. Completely "
             "remove every strand of long hair below the ears and reconstruct the source person's "
-            "neck, shoulders, clothing, and background where it was removed. Keep the source "
-            "person's original hair color exactly unchanged; do not copy the reference hair "
-            "color. Do not generate shoulder-length or long hair. Preserve the exact identity, "
-            "face, facial features, expression, lighting, and pose."
+            "neck, shoulders, clothing, and background where it was removed. Use a natural "
+            "medium brown hair color consistently. Do not copy any gray or silver color from "
+            "the reference. Do not generate black, gray, silver, blonde, or red hair. Do not "
+            "generate shoulder-length or long hair. Preserve the exact identity, face, facial "
+            "features, expression, lighting, and pose."
         ),
     ),
     "remove_bangs": EditSpec(

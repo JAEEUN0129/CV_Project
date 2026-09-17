@@ -47,6 +47,27 @@ def _align_target_hair(
     ) > 0
 
 
+def _expand_old_hair(
+    old_hair: np.ndarray,
+    frame_face: np.ndarray,
+    frame_face_box: tuple[int, int, int, int],
+) -> np.ndarray:
+    """Add reconstruction context around old hair without exposing the face."""
+    face_left, face_top, face_right, face_bottom = frame_face_box
+    face_width = max(1, face_right - face_left)
+    face_height = max(1, face_bottom - face_top)
+    kernel_width = max(15, round(face_width * 0.18)) | 1
+    kernel_height = max(15, round(face_height * 0.14)) | 1
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (kernel_width, kernel_height)
+    )
+    expanded = cv2.dilate(old_hair.astype(np.uint8), kernel) > 0
+    vertical_height = max(11, round(face_height * 0.10)) | 1
+    vertical_kernel = np.ones((vertical_height, 3), dtype=np.uint8)
+    expanded |= cv2.dilate(old_hair.astype(np.uint8), vertical_kernel) > 0
+    return expanded & ~frame_face
+
+
 def build_short_hair_mask_video(
     source: Path,
     anchor: Path,
@@ -93,7 +114,8 @@ def build_short_hair_mask_video(
                 target_masks.append(None)
                 continue
             new_hair = _align_target_hair(target_hair, target_face_box, frame_face_box)
-            masks.append(old_hair | new_hair)
+            expanded_old_hair = _expand_old_hair(old_hair, frame_face, frame_face_box)
+            masks.append(expanded_old_hair | new_hair)
             target_masks.append(new_hair)
     capture.release()
     if not masks:
