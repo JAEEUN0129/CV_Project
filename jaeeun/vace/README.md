@@ -77,3 +77,9 @@ pip install -r /root/CV_Project/jaeeun/requirements-flux.txt
 The default model is `black-forest-labs/FLUX.2-klein-4B`. It is downloaded on
 first use and cached by Hugging Face. The worker belongs in the isolated FLUX
 environment, not the working VACE Python environment.
+
+For large silhouette changes such as long-to-short hair, add
+`--flux-edit-mode reference_only`. This uses the source frame and hairstyle
+reference directly without an inpainting mask. The default `masked` mode remains
+recommended for local changes such as bangs and waves because it preserves the
+face and background more strictly.

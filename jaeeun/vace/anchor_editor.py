@@ -34,20 +34,23 @@ class FluxAnchorEditor:
     python: Path
     worker: Path
     cpu_offload: bool = True
+    edit_mode: str = "masked"
 
     def create(
         self, source: Path, reference: Path, mask: Path | None, prompt: str, output: Path
     ) -> Path:
-        if mask is None:
+        if self.edit_mode == "masked" and mask is None:
             raise ValueError("FLUX anchor generation requires an anchor edit mask")
         command = [
             str(self.python), str(self.worker),
             "--source", str(source),
             "--reference", str(reference),
-            "--mask", str(mask),
+            "--edit-mode", self.edit_mode,
             "--prompt", prompt,
             "--output", str(output),
         ]
+        if mask is not None:
+            command.extend(["--mask", str(mask)])
         if self.cpu_offload:
             command.append("--cpu-offload")
         subprocess.run(command, check=True)

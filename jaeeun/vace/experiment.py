@@ -31,6 +31,9 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, default=Path("/root/models/Wan2.1-VACE-1.3B"))
     parser.add_argument("--flux-python", type=Path, default=Path("/root/flux-env/bin/python"))
     parser.add_argument("--flux-worker", type=Path)
+    parser.add_argument(
+        "--flux-edit-mode", choices=("masked", "reference_only"), default="masked"
+    )
     parser.add_argument("--frame-num", type=int, default=41)
     parser.add_argument("--sample-steps", type=int, default=30)
     parser.add_argument("--guide-scale", type=float, default=7.0)
@@ -58,10 +61,15 @@ def main() -> None:
     else:
         if args.flux_worker is None:
             parser.error("--flux-worker is required for the flux provider")
-        if args.anchor_mask is None:
+        if args.flux_edit_mode == "masked" and args.anchor_mask is None:
             build_anchor_mask(selected_frame, anchor_mask, args.edit_type)
-        editor = FluxAnchorEditor(args.flux_python, args.flux_worker)
-    editor.create(selected_frame, args.style_reference, anchor_mask, spec.prompt, final_anchor)
+        editor = FluxAnchorEditor(
+            args.flux_python, args.flux_worker, edit_mode=args.flux_edit_mode
+        )
+    editor_mask = anchor_mask
+    if args.anchor_provider == "flux" and args.flux_edit_mode == "reference_only":
+        editor_mask = None
+    editor.create(selected_frame, args.style_reference, editor_mask, spec.prompt, final_anchor)
 
     mask_video = args.mask_video or args.workspace / f"mask-{args.edit_type}.mp4"
     masked_video = args.masked_video or args.workspace / f"source-masked-{args.edit_type}.mp4"
@@ -109,6 +117,7 @@ def main() -> None:
         "edit_type": spec.name,
         "mask_strategy": spec.mask_strategy,
         "anchor_provider": args.anchor_provider,
+        "flux_edit_mode": args.flux_edit_mode if args.anchor_provider == "flux" else None,
         "anchor_frame_index": selected.frame_index,
         "anchor_time_seconds": selected.timestamp_seconds,
         "anchor_face_bbox": selected.face_bbox,
