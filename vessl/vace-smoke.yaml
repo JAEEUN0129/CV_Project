@@ -1,0 +1,59 @@
+# VACE가 참조 헤어를 머리 마스크 안에만 생성할 수 있는지 확인하는 1.3B 스모크 테스트.
+#
+# 실행 전 VESSL Dataset 세 개를 준비한다.
+#   vace-input/source.mp4       : 3~5초 원본 영상
+#   vace-input/hair-mask.png    : 첫 프레임의 흰색=머리 마스크
+#   vace-reference/style.png   : 색상까지 반영된 헤어 참조 이미지
+#
+# 모델 가중치는 매번 다운로드하지 않도록 VESSL Dataset으로 미리 저장한다.
+# Hugging Face repo: Wan-AI/Wan2.1-VACE-1.3B
+
+name: vace-hair-smoke-test
+description: Wan2.1-VACE-1.3B로 마스크 기반 헤어 영상 생성을 검증한다
+
+image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+resources:
+  preset: gpu-l4-small
+
+import:
+  /root/vace-model: vessl-dataset://vace-wan21-1.3b
+  /root/input: vessl-dataset://vace-input
+  /root/reference: vessl-dataset://vace-reference
+
+run:
+  - workdir: /root
+    command: |
+      set -euxo pipefail
+
+      nvidia-smi
+      apt-get update
+      apt-get install -y git ffmpeg libgl1 libglib2.0-0
+      git clone --depth 1 https://github.com/ali-vilab/VACE.git
+      cd /root/VACE
+
+      # flash-attn의 setup.py가 torch를 import하므로 격리된 빌드 환경을 끄다.
+      pip install -U packaging ninja
+      pip install --no-build-isolation -r requirements.txt
+      pip install -r requirements/annotator.txt
+      pip install "wan@git+https://github.com/Wan-Video/Wan2.1"
+
+      test -f /root/input/source.mp4
+      test -f /root/input/hair-mask.png
+      test -f /root/reference/style.png
+
+      python vace/vace_pipeline.py \
+        --base wan \
+        --task swap_anything \
+        --mode masktrack,plain \
+        --video /root/input/source.mp4 \
+        --mask /root/input/hair-mask.png \
+        --image /root/reference/style.png \
+        --ckpt_dir /root/vace-model \
+        --prompt "A photorealistic video of the same person with the hairstyle and hair color from the reference image. Preserve the person's identity, face, clothing, pose, camera motion, lighting, and background. Only the hair changes, with natural strands and temporally consistent motion."
+
+      mkdir -p /root/outputs
+      cp -r results/. /root/outputs/
+
+export:
+  /root/outputs: vessl-dataset://vace-hair-smoke-results

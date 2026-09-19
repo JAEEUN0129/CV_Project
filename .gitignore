@@ -1,0 +1,25 @@
+# Local Python environments and caches
+.venv/
+.venv_hair/
+__pycache__/
+*.py[cod]
+
+# Generated inputs, masks, results and downloaded checkpoints
+artifacts/
+checkpoints/
+.cache/
+
+# Third-party model source and weights. Cloned and downloaded by SETUP.md; several
+# gigabytes, and not ours to redistribute.
+external/
+
+# Source footage. Clips of real people must not enter the history, because deleting a
+# file later does not remove it from past commits.
+data/*.mp4
+data/*.mov
+data/*.png
+data/*.jpg
+data/*/private/
+
+# Streamlit local settings
+.streamlit/secrets.toml
