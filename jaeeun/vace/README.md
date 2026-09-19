@@ -1,5 +1,49 @@
 # Anchor-driven VACE experiments
 
+## Personal-colour anchor flow
+
+The optional `jaeeun/vace_app.py` screen keeps Flux in the pipeline. It generates
+three colour-specific anchor images, displays them for selection, and sends only
+the selected anchor to Wan/VACE.
+
+Run it from the repository root after installing the server requirements:
+
+```bash
+streamlit run jaeeun/vace_app.py
+```
+
+Set these environment variables on the GPU host:
+
+```text
+FLUX_PYTHON=/root/flux-env/bin/python
+FLUX_WORKER=/root/CV_Project/jaeeun/vace/flux_worker.py
+VACE_REPO=/root/VACE
+VACE_MODEL_DIR=/root/models/Wan2.1-VACE-1.3B
+PERSONAL_COLOR_CHECKPOINT=/root/models/personal_color_korean_tuned_v2.pt
+```
+
+For VESSL, use `vessl/vace-ui.yaml`. Before launching, create these datasets
+or change the dataset URIs in that file:
+
+- `vace-wan21-1.3b`: the Wan2.1-VACE-1.3B checkpoint
+- `personal-color-classifier`: `personal_color_korean_tuned_v2.pt`
+
+Then run from the repository root:
+
+```bash
+vessl run -f vessl/vace-ui.yaml
+```
+
+The run exposes Streamlit on HTTP port `8501`. Open the run's exposed URL,
+upload a video and hairstyle reference, generate the three Flux candidates,
+select one, and start Wan. The existing `vace-smoke.yaml` remains the cheaper
+non-interactive smoke test.
+
+`PERSONAL_COLOR_CHECKPOINT` is optional. When it is set, the representative
+video frame is classified into one of four personal-colour classes before the
+three candidates are generated. Without it, the selected palette in the screen
+is used. Wan runs only after the user selects one of the three Flux anchors.
+
 This package keeps anchor creation separate from video generation so the image
 editor can be changed without rewriting the VACE stage.
 
