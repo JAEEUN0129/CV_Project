@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
 
 import streamlit as st
+
+# Streamlit executes this file directly, so the repository root is not always
+# on sys.path even though it contains the jaeeun package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from jaeeun.personal_color import classify_personal_color
 from jaeeun.vace.anchor_mask import build_anchor_mask
