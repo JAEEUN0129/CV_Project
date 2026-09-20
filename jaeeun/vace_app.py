@@ -140,8 +140,9 @@ st.markdown(
       :root{--ink:#18181b;--muted:#71717a;--line:#e4e4e7;--canvas:#eef0f3;--accent:#6758d8}
     html,body,[data-testid="stAppViewContainer"]{margin:0;padding:0}
     .stApp{background:#f7f7f8;color:var(--ink);height:100vh;overflow:hidden}
-    .main,[data-testid="stAppViewContainer"],[data-testid="stAppViewBlockContainer"]{padding-top:0!important}
+    .main,section.main,[data-testid="stAppViewContainer"],[data-testid="stAppViewBlockContainer"]{padding-top:0!important;margin-top:0!important}
     .block-container{max-width:none;width:100%;height:100vh;min-height:0;margin:0;padding:0;overflow:hidden}
+    div[data-testid="column"]:first-child{padding-left:1rem;padding-right:.8rem}
       header[data-testid="stHeader"]{display:none}
     .studio-header{height:3.5rem;display:flex;align-items:center;justify-content:flex-start;gap:3rem;border-bottom:1px solid var(--line);background:#fff;padding:0 1.25rem}.brand{display:flex;align-items:center;gap:.7rem}.brand-name{font-size:1rem;font-weight:750}.brand-subtitle{color:var(--muted);font-size:.68rem;margin-left:.25rem}
     .stepper{display:flex;align-items:center;gap:.5rem;color:#a1a1aa;font-size:.68rem;transform:none}.step{display:flex;align-items:center;gap:.3rem;white-space:nowrap}.step-dot{width:1.2rem;height:1.2rem;border-radius:50%;display:grid;place-items:center;background:#e4e4e7;color:#71717a;font-size:.6rem;font-weight:700}.step.active{color:var(--ink);font-weight:650}.step.active .step-dot{background:var(--accent);color:#fff}.step-line{width:1rem;height:1px;background:var(--line)}
@@ -181,7 +182,7 @@ with left:
         if source_upload and st.session_state.get("source_digest") != digest(source_upload):
             st.session_state.source_path = str(save_upload(source_upload, ".mp4")); st.session_state.source_digest = digest(source_upload); clear_from_upload_change("source")
         ready = bool(style_prompt.strip() and reference_upload and source_upload)
-        if ready and st.button("컬러 분석 시작", type="primary", use_container_width=True):
+        if st.button("입력 완료", type="primary", use_container_width=True, disabled=not ready):
             st.session_state.style_prompt = style_prompt
             try:
                 frame = get_representative_frame()
@@ -196,7 +197,6 @@ with left:
                 st.rerun()
             except (RuntimeError, ValueError, OSError) as error:
                 st.error(str(error))
-        st.caption("텍스트, 스타일 사진, 사용자 영상을 모두 입력하면 다음 단계로 이동합니다.")
     else:
         result = st.session_state.personal_color_result
         st.markdown('<div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
