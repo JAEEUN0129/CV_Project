@@ -138,12 +138,69 @@ st.markdown(
     """
     <style>
       :root{--ink:#18181b;--muted:#71717a;--line:#e4e4e7;--canvas:#eef0f3;--accent:#6758d8}
-    html,body,[data-testid="stAppViewContainer"]{margin:0;padding:0}
-    .stApp{background:#f7f7f8;color:var(--ink);height:100vh;overflow:hidden}
-    .main,section.main,[data-testid="stAppViewContainer"],[data-testid="stAppViewBlockContainer"]{padding-top:0!important;margin-top:0!important}
-    .block-container{max-width:none;width:100%;height:100vh;min-height:0;margin:0;padding:0;overflow:hidden}
-    div[data-testid="column"]:first-child{padding-left:1rem;padding-right:.8rem}
-      header[data-testid="stHeader"]{display:none}
+    html,
+    body,
+    [data-testid="stAppViewContainer"]{
+      margin:0!important;
+      padding:0!important;
+    }
+
+    .stApp{
+      background:#f7f7f8;
+      color:var(--ink);
+      height:100vh;
+      overflow:hidden;
+    }
+
+    /* Streamlit 기본 상단 여백 제거 */
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"],
+    .stMainBlockContainer,
+    .main,
+    section.main,
+    .block-container{
+      margin-top:0!important;
+      padding-top:0!important;
+    }
+
+    [data-testid="stMainBlockContainer"],
+    .stMainBlockContainer,
+    .block-container{
+      max-width:none!important;
+      width:100%!important;
+      height:100vh!important;
+      min-height:0!important;
+      margin:0!important;
+      padding:0!important;
+      overflow:hidden;
+    }
+
+    /* Streamlit 기본 header/toolbar 공간 제거 */
+    header[data-testid="stHeader"]{
+      display:none!important;
+      height:0!important;
+      min-height:0!important;
+    }
+
+    [data-testid="stToolbar"]{
+      display:none!important;
+    }
+
+    /* 첫 번째 컬럼에 fallback 여백 적용 */
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child{
+      padding-left:1.4rem!important;
+      padding-right:1rem!important;
+      box-sizing:border-box!important;
+    }
+
+    /* 왼쪽 컨트롤 패널 전용 여백 */
+    .st-key-left_rail{
+      padding-left:0!important;
+      padding-right:0!important;
+      padding-top:.7rem!important;
+      box-sizing:border-box!important;
+    }
     .studio-header{height:3.5rem;display:flex;align-items:center;justify-content:flex-start;gap:3rem;border-bottom:1px solid var(--line);background:#fff;padding:0 1.25rem}.brand{display:flex;align-items:center;gap:.7rem}.brand-name{font-size:1rem;font-weight:750}.brand-subtitle{color:var(--muted);font-size:.68rem;margin-left:.25rem}
     .stepper{display:flex;align-items:center;gap:.5rem;color:#a1a1aa;font-size:.68rem;transform:none}.step{display:flex;align-items:center;gap:.3rem;white-space:nowrap}.step-dot{width:1.2rem;height:1.2rem;border-radius:50%;display:grid;place-items:center;background:#e4e4e7;color:#71717a;font-size:.6rem;font-weight:700}.step.active{color:var(--ink);font-weight:650}.step.active .step-dot{background:var(--accent);color:#fff}.step-line{width:1rem;height:1px;background:var(--line)}
     .rail{background:#fff;border-right:1px solid var(--line);padding:.7rem .9rem;min-height:calc(100vh - 3.5rem);overflow:visible}.rail-kicker{color:var(--accent);text-transform:uppercase;letter-spacing:.1em;font-size:.58rem;font-weight:800}.rail-title{font-size:1.05rem;font-weight:760;letter-spacing:-.04em;margin:.2rem 0}.rail-copy{color:var(--muted);font-size:.68rem;line-height:1.35;margin-bottom:.55rem}.section{border-top:1px solid #f0f0f2;padding:.45rem 0}.section-title{font-size:.68rem;font-weight:750;margin-bottom:.3rem}.section-number{color:var(--accent);margin-right:.3rem}.helper{color:var(--muted);font-size:.62rem;line-height:1.35}.upload-summary{background:#f7f7f8;border:1px solid var(--line);border-radius:.6rem;padding:.4rem .5rem;font-size:.68rem}.upload-summary strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upload-summary span{color:#35a06b;font-size:.62rem}
@@ -170,55 +227,56 @@ st.markdown(f'<div class="studio-header"><div class="brand"><div><span class="br
 
 left, main = st.columns([0.29, 0.71], gap="small")
 with left:
-    st.markdown('<div class="rail-kicker">Beauty AI editor</div><div class="rail-title">AI Hair Color Studio</div><div class="rail-copy">내 얼굴과 원하는 헤어스타일에 어울리는 컬러를 미리 확인해보세요.</div>', unsafe_allow_html=True)
+    with st.container(key="left_rail"):
+        st.markdown('<div class="rail-kicker">Beauty AI editor</div><div class="rail-title">AI Hair Color Studio</div><div class="rail-copy">내 얼굴과 원하는 헤어스타일에 어울리는 컬러를 미리 확인해보세요.</div>', unsafe_allow_html=True)
 
-    if st.session_state.phase == "upload":
-        st.markdown('<div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
-        style_prompt = st.text_input("원하는 헤어스타일", placeholder="예: 긴 웨이브 헤어, 시스루뱅 중단발", key="style_prompt_input")
-        reference_upload = st.file_uploader("원하는 스타일의 사진", type=["jpg", "jpeg", "png", "webp"], key="reference_upload")
-        source_upload = st.file_uploader("사용자 영상", type=["mp4", "mov"], key="source_upload")
-        if reference_upload and st.session_state.get("reference_digest") != digest(reference_upload):
-            st.session_state.reference_path = str(save_upload(reference_upload)); st.session_state.reference_digest = digest(reference_upload)
-        if source_upload and st.session_state.get("source_digest") != digest(source_upload):
-            st.session_state.source_path = str(save_upload(source_upload, ".mp4")); st.session_state.source_digest = digest(source_upload); clear_from_upload_change("source")
-        ready = bool(style_prompt.strip() and reference_upload and source_upload)
-        if st.button("입력 완료", type="primary", use_container_width=True, disabled=not ready):
-            st.session_state.style_prompt = style_prompt
-            try:
-                frame = get_representative_frame()
-                checkpoint = os.environ.get("PERSONAL_COLOR_CHECKPOINT")
-                if checkpoint:
-                    result = classify_personal_color(frame, Path(checkpoint))
-                    st.session_state.personal_color_result = {"label": result.label, "label_ko": result.label_ko, "confidence": result.confidence, "source": "AI 분석"}
-                else:
-                    st.session_state.personal_color_result = {"label": "summer_cool", "label_ko": COLOR_LABELS["summer_cool"], "confidence": None, "source": "기본 추천"}
-                st.session_state.phase = "color"
-                st.session_state.edit_type = "wave"
-                st.rerun()
-            except (RuntimeError, ValueError, OSError) as error:
-                st.error(str(error))
-    else:
-        result = st.session_state.personal_color_result
-        st.markdown('<div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="upload-summary"><strong>{Path(st.session_state.source_path).name}</strong><span>✓ 영상 입력 완료</span></div>', unsafe_allow_html=True)
-        st.caption(f"스타일: {st.session_state.style_prompt}")
+        if st.session_state.phase == "upload":
+            st.markdown('<div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
+            style_prompt = st.text_input("원하는 헤어스타일", placeholder="예: 긴 웨이브 헤어, 시스루뱅 중단발", key="style_prompt_input")
+            reference_upload = st.file_uploader("원하는 스타일의 사진", type=["jpg", "jpeg", "png", "webp"], key="reference_upload")
+            source_upload = st.file_uploader("사용자 영상", type=["mp4", "mov"], key="source_upload")
+            if reference_upload and st.session_state.get("reference_digest") != digest(reference_upload):
+                st.session_state.reference_path = str(save_upload(reference_upload)); st.session_state.reference_digest = digest(reference_upload)
+            if source_upload and st.session_state.get("source_digest") != digest(source_upload):
+                st.session_state.source_path = str(save_upload(source_upload, ".mp4")); st.session_state.source_digest = digest(source_upload); clear_from_upload_change("source")
+            ready = bool(style_prompt.strip() and reference_upload and source_upload)
+            if st.button("입력 완료", type="primary", use_container_width=True, disabled=not ready):
+                st.session_state.style_prompt = style_prompt
+                try:
+                    frame = get_representative_frame()
+                    checkpoint = os.environ.get("PERSONAL_COLOR_CHECKPOINT")
+                    if checkpoint:
+                        result = classify_personal_color(frame, Path(checkpoint))
+                        st.session_state.personal_color_result = {"label": result.label, "label_ko": result.label_ko, "confidence": result.confidence, "source": "AI 분석"}
+                    else:
+                        st.session_state.personal_color_result = {"label": "summer_cool", "label_ko": COLOR_LABELS["summer_cool"], "confidence": None, "source": "기본 추천"}
+                    st.session_state.phase = "color"
+                    st.session_state.edit_type = "wave"
+                    st.rerun()
+                except (RuntimeError, ValueError, OSError) as error:
+                    st.error(str(error))
+        else:
+            result = st.session_state.personal_color_result
+            st.markdown('<div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="upload-summary"><strong>{Path(st.session_state.source_path).name}</strong><span>✓ 영상 입력 완료</span></div>', unsafe_allow_html=True)
+            st.caption(f"스타일: {st.session_state.style_prompt}")
 
-        st.markdown('<div class="section-title"><span class="section-number">02</span>Color</div>', unsafe_allow_html=True)
-        confidence = f'<div class="confidence">Confidence <b>{result["confidence"]:.0%}</b></div>' if result.get("confidence") is not None else ''
-        st.markdown(f'<div class="color-result"><strong>당신의 퍼스널컬러는 {result["label_ko"]}입니다.</strong><div class="confidence">{result.get("source", "분석 결과")}</div>{confidence}</div>', unsafe_allow_html=True)
-        st.caption("추천 색상을 선택하면 오른쪽 Preview가 바뀝니다.")
-        for color_index, (color_id, _, prompt_color) in enumerate(PERSONAL_COLOR_PALETTES[result["label"]], start=1):
-            english, korean, hex_color = color_meta(color_id)
-            if st.button(f"{color_index}.  {korean}  ·  {english}", key=f"color_{color_id}", use_container_width=True):
-                st.session_state.selected_anchor = color_id
-                st.session_state.selected_preview = color_id
-                if not st.session_state.vace_candidates:
-                    try:
-                        with st.spinner("추천 컬러 Preview를 생성하는 중..."):
-                            create_anchor_candidates()
-                        st.rerun()
-                    except (RuntimeError, ValueError, FileNotFoundError) as error:
-                        st.error(str(error))
+            st.markdown('<div class="section-title"><span class="section-number">02</span>Color</div>', unsafe_allow_html=True)
+            confidence = f'<div class="confidence">Confidence <b>{result["confidence"]:.0%}</b></div>' if result.get("confidence") is not None else ''
+            st.markdown(f'<div class="color-result"><strong>당신의 퍼스널컬러는 {result["label_ko"]}입니다.</strong><div class="confidence">{result.get("source", "분석 결과")}</div>{confidence}</div>', unsafe_allow_html=True)
+            st.caption("추천 색상을 선택하면 오른쪽 Preview가 바뀝니다.")
+            for color_index, (color_id, _, prompt_color) in enumerate(PERSONAL_COLOR_PALETTES[result["label"]], start=1):
+                english, korean, hex_color = color_meta(color_id)
+                if st.button(f"{color_index}.  {korean}  ·  {english}", key=f"color_{color_id}", use_container_width=True):
+                    st.session_state.selected_anchor = color_id
+                    st.session_state.selected_preview = color_id
+                    if not st.session_state.vace_candidates:
+                        try:
+                            with st.spinner("추천 컬러 Preview를 생성하는 중..."):
+                                create_anchor_candidates()
+                            st.rerun()
+                        except (RuntimeError, ValueError, FileNotFoundError) as error:
+                            st.error(str(error))
 
 with main:
     if st.session_state.phase == "upload":
