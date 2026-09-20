@@ -169,10 +169,10 @@ st.markdown(f'<div class="studio-header"><div class="brand"><div><span class="br
 
 left, main = st.columns([0.29, 0.71], gap="small")
 with left:
-    st.markdown('<div class="rail"><div class="rail-kicker">Beauty AI editor</div><div class="rail-title">AI Hair Color Studio</div><div class="rail-copy">내 얼굴과 원하는 헤어스타일에 어울리는 컬러를 미리 확인해보세요.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="rail-kicker">Beauty AI editor</div><div class="rail-title">AI Hair Color Studio</div><div class="rail-copy">내 얼굴과 원하는 헤어스타일에 어울리는 컬러를 미리 확인해보세요.</div>', unsafe_allow_html=True)
 
     if st.session_state.phase == "upload":
-        st.markdown('<div class="section"><div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
         style_prompt = st.text_input("원하는 헤어스타일", placeholder="예: 긴 웨이브 헤어, 시스루뱅 중단발", key="style_prompt_input")
         reference_upload = st.file_uploader("원하는 스타일의 사진", type=["jpg", "jpeg", "png", "webp"], key="reference_upload")
         source_upload = st.file_uploader("사용자 영상", type=["mp4", "mov"], key="source_upload")
@@ -197,15 +197,13 @@ with left:
             except (RuntimeError, ValueError, OSError) as error:
                 st.error(str(error))
         st.caption("텍스트, 스타일 사진, 사용자 영상을 모두 입력하면 다음 단계로 이동합니다.")
-        st.markdown('</div>', unsafe_allow_html=True)
     else:
         result = st.session_state.personal_color_result
-        st.markdown('<div class="section"><div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="upload-summary"><strong>{Path(st.session_state.source_path).name}</strong><span>✓ 영상 입력 완료</span></div>', unsafe_allow_html=True)
         st.caption(f"스타일: {st.session_state.style_prompt}")
-        st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="section"><div class="section-title"><span class="section-number">02</span>Color</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title"><span class="section-number">02</span>Color</div>', unsafe_allow_html=True)
         confidence = f'<div class="confidence">Confidence <b>{result["confidence"]:.0%}</b></div>' if result.get("confidence") is not None else ''
         st.markdown(f'<div class="color-result"><strong>당신의 퍼스널컬러는 {result["label_ko"]}입니다.</strong><div class="confidence">{result.get("source", "분석 결과")}</div>{confidence}</div>', unsafe_allow_html=True)
         st.caption("추천 색상을 선택하면 오른쪽 Preview가 바뀝니다.")
@@ -221,9 +219,6 @@ with left:
                         st.rerun()
                     except (RuntimeError, ValueError, FileNotFoundError) as error:
                         st.error(str(error))
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 with main:
     if st.session_state.phase == "upload":
@@ -232,7 +227,6 @@ with main:
         selected = next((item for item in st.session_state.vace_candidates if item["id"] == st.session_state.selected_anchor), None)
         preview_path = selected["path"] if selected else st.session_state.get("representative_frame")
         title = color_meta(selected["id"])[0] if selected else "Original Frame"
-        st.markdown('<div class="preview-zone">', unsafe_allow_html=True)
         st.markdown(f'<div class="preview-toolbar"><div><div class="preview-label">Color Preview</div><div class="preview-title">{title}</div></div><div class="helper">추천 색상을 선택해보세요.</div></div>', unsafe_allow_html=True)
         if preview_path and Path(preview_path).exists(): st.markdown(f'<div class="canvas"><img src="{image_uri(preview_path)}" alt="{title}"></div>', unsafe_allow_html=True)
         else: st.markdown('<div class="canvas"><div class="empty-canvas">색상 버튼을 누르면 Preview가 생성됩니다.</div></div>', unsafe_allow_html=True)
@@ -257,14 +251,12 @@ with main:
                 st.rerun()
             except (RuntimeError, ValueError, FileNotFoundError, OSError) as error:
                 st.error(str(error))
-        st.markdown('</div>', unsafe_allow_html=True)
     else:
         result_path = st.session_state.get("video_result")
-        st.markdown('<div class="preview-zone"><div class="preview-toolbar"><div><div class="preview-label">Video Result</div><div class="preview-title">선택한 헤어컬러 영상</div></div><div class="helper">03 Video</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="preview-toolbar"><div><div class="preview-label">Video Result</div><div class="preview-title">선택한 헤어컬러 영상</div></div><div class="helper">03 Video</div></div>', unsafe_allow_html=True)
         if result_path and Path(result_path).exists():
             st.video(result_path)
             with open(result_path, "rb") as result_file:
                 st.download_button("결과 영상 다운로드", result_file, file_name=Path(result_path).name, mime="video/mp4", use_container_width=True)
         else:
             st.markdown('<div class="canvas"><div class="empty-canvas"><div class="empty-icon">◌</div><strong>영상 생성 기능을 준비 중입니다.</strong><br>Wan/VACE 모델이 연결되면 이곳에 최종 영상이 표시됩니다.</div></div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
