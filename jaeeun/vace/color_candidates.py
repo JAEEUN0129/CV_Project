@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .anchor_editor import FluxAnchorEditor
-from .style_options import COLOR_OPTIONS, hairstyle_prompt
+from .style_options import COLOR_OPTIONS, regional_prompt
+from .regional_edit import regional_masks, edit_region
 
 
 @dataclass(frozen=True)
@@ -100,8 +102,22 @@ def requested_hair_mask(image: Path):
         crop_path = Path(directory) / "portrait.png"
         Image.fromarray(pixels[y0:y1, x0:x1]).save(crop_path)
         class_map, labels, probabilities = parser.predict(crop_path, return_probabilities=True)
+        portrait_mask = hair_mask_from_scores(class_map, labels, probabilities)
+        # Inspect both lower-side regions at higher effective resolution. Keep
+        # context and require connection to the whole-portrait prediction.
+        height, width = portrait_mask.shape
+        lower = round(height * .40)
+        for left, right in ((0, round(width * .65)), (round(width * .35), width)):
+            detail_path = Path(directory) / f"tips-{left}.png"
+            Image.fromarray(pixels[y0 + lower:y1, x0 + left:x0 + right]).save(detail_path)
+            detail_classes, detail_labels, detail_probs = parser.predict(detail_path, return_probabilities=True)
+            detail_mask = hair_mask_from_scores(detail_classes, detail_labels, detail_probs)
+            portrait_mask[lower:, left:right] = merge_detail_mask(
+                portrait_mask[lower:, left:right], detail_mask,
+                class_map[lower:, left:right], labels,
+            )
     mask = np.zeros(pixels.shape[:2], dtype=bool)
-    mask[y0:y1, x0:x1] = hair_mask_from_scores(class_map, labels, probabilities)
+    mask[y0:y1, x0:x1] = portrait_mask
     if not mask.any():
         raise ValueError("요청한 스타일 이미지에서 머리 영역을 찾지 못했습니다.")
     Image.fromarray(mask.astype(np.uint8) * 255).save(image.with_name(f"{image.stem}-hair-mask.png"))
@@ -109,6 +125,19 @@ def requested_hair_mask(image: Path):
     overlay[mask] = (pixels[mask] * 0.5 + np.array([103, 88, 216]) * 0.5).astype(np.uint8)
     Image.fromarray(overlay).save(image.with_name(f"{image.stem}-hair-overlay.png"))
     return mask
+
+
+def merge_detail_mask(base, detail, classes, labels):
+    import cv2
+    import numpy as np
+
+    # Full-image skin detection protects hands/face when a close crop is ambiguous.
+    protected_ids = [i for i, name in labels.items() if name.lower() in
+                     {"skin", "face", "neck", "nose", "l_eye", "r_eye", "mouth", "u_lip", "l_lip"}]
+    eligible = base | (detail & ~np.isin(classes, protected_ids))
+    _, components = cv2.connectedComponents(eligible.astype(np.uint8), connectivity=8)
+    connected = np.unique(components[base])
+    return np.isin(components, connected[connected != 0])
 
 
 def recolor_requested(image: Path, mask, color: str, output: Path) -> Path:
@@ -184,25 +213,21 @@ def build_color_candidates(
             color = "the same as in the supplied anchor image"
             instruction = "Preserve the original hair color of the source person."
         output = output_dir / "anchor-requested.png"
-        refine_wave = bool((requested_options or {}).get("wave") and reference is not None)
-        draft = output_dir / "anchor-requested-draft.png" if refine_wave else output
+        options = requested_options or {}
+        needs_regions = any(options.get(key) for key in ("bangs", "wave", "length"))
+        draft = output_dir / "anchor-requested-draft.png" if needs_regions else output
         editor.create(source, reference, mask, f"{base_prompt} {instruction}", draft)
-        if refine_wave:
-            import numpy as np
-            from PIL import Image
-
-            draft_hair = requested_hair_mask(draft)
-            # Include the existing edit area plus all newly generated hair.
-            refinement_mask = output_dir / "requested-refinement-mask.png"
-            original_mask = np.array(Image.open(mask).convert("L")) > 0
-            Image.fromarray((original_mask | draft_hair).astype(np.uint8) * 255).save(refinement_mask)
-            refinement_prompt = (
-                "Correct the hairstyle of this already edited person. "
-                + hairstyle_prompt(requested_options, True)
-                + " Preserve the hair color of this source image."
-            )
-            # Unselected attributes (notably bangs) still belong to the reference.
-            editor.create(draft, reference, refinement_mask, refinement_prompt, output)
+        current = draft
+        if options.get("bangs"):
+            fringe, _ = regional_masks(current, options["bangs"])
+            current = edit_region(editor, current, fringe, regional_prompt(options, "bangs"),
+                                  output_dir / "anchor-bangs.png")
+        if options.get("wave") or options.get("length"):
+            _, body = regional_masks(current)
+            current = edit_region(editor, current, body, regional_prompt(options, "body"),
+                                  output_dir / "anchor-body.png")
+        if current != output:
+            shutil.copy2(current, output)
         candidates.append(HairColorCandidate("requested", "요청한 스타일", color, output))
         requested_anchor = output
         hair_mask = requested_hair_mask(requested_anchor)

@@ -13,6 +13,22 @@ COLOR_OPTIONS = {
     "애쉬브라운": ("ash_brown", "애쉬 브라운", "cool ash brown"),
 }
 
+BANGS_INSTRUCTIONS = {
+    "풀뱅": "Create a dense, continuous blunt fringe across the forehead, ending just above the eyebrows. No centre part or open curtain gap.",
+    "시스루뱅": "Create sparse, fine separated wispy bangs across the forehead with visible skin between strands. Do not create a thick solid fringe.",
+    "처피뱅": "Create short choppy baby bangs ending high on the forehead, clearly above the eyebrows, with an irregular textured edge. Leave a visible strip of bare forehead below the fringe. No eyebrow-length full bangs.",
+    "커튼뱅": "Remove the full horizontal fringe. Create a clearly open centre part with visible central forehead. Sweep two symmetric fringe sections outward toward the temples, gradually lengthening at the sides. No straight-across blunt bangs and no solid fringe covering the centre forehead.",
+}
+
+
+def regional_prompt(options: dict, region: str) -> str:
+    preserve = " Preserve this image's exact identity, facial features, hair colour, lighting and background."
+    if region == "bangs":
+        return BANGS_INSTRUCTIONS[options["bangs"]] + " Edit only the forehead fringe; preserve all side and lower hair." + preserve
+    body_options = {key: value for key, value in options.items() if key in {"length", "wave"}}
+    return (hairstyle_prompt(body_options, False)
+            + " Edit only the side and lower hair. The existing forehead fringe and top centre hair are locked and must not change." + preserve)
+
 
 def inputs_ready(has_video: bool, options: dict, has_reference: bool) -> bool:
     return bool(has_video and (any(options.values()) or has_reference))
@@ -36,6 +52,8 @@ def hairstyle_prompt(options: dict, has_reference: bool) -> str:
         instructions.append("The hair must extend visibly below the shoulders toward the chest. Do not produce a bob or shoulder-length haircut.")
     if options.get("wave") == "C컬":
         instructions.append("Keep the upper lengths smooth and mostly straight, with a single inward C-shaped bend at the ends. Do not create S-waves, repeated waves or tight curls.")
+    if options.get("bangs"):
+        instructions.append(BANGS_INSTRUCTIONS[options["bangs"]])
     instructions.append("Preserve the source person's identity, face, expression, clothing and background.")
     return " ".join(instructions)
 

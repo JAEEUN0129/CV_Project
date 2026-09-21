@@ -1,0 +1,54 @@
+<!doctype html><html lang="ko"><meta charset="utf-8">
+<style>
+body{margin:0;font:13px sans-serif;color:#333} .tools{display:flex;gap:5px;flex-wrap:wrap;margin:5px 0}
+button,select{padding:6px;border:1px solid #ccc;border-radius:5px;background:white}
+button.apply{background:#6758d8;color:white}canvas{display:block;max-width:100%;margin:auto;touch-action:none;background:#eee}
+p{font-size:12px;color:#666;margin:5px 0}
+</style>
+<div class="tools"><select id="mode" aria-label="브러시 모드"><option value="add">영역 추가</option><option value="erase">영역 제거</option></select>
+<input id="radius" type="range" min="1" max="8" value="3" aria-label="브러시 크기" style="width:80px">
+<button id="undo">되돌리기</button><button id="reset">초기화</button></div>
+<canvas id="view" aria-label="염색 영역 편집"></canvas>
+<p>보라색이 염색 영역입니다. 머리 끝을 칠하거나 피부·옷 영역을 지운 뒤 적용하세요.</p>
+<button id="apply" class="apply">보정 적용</button><span id="status" role="status"></span>
+<script>
+const view=document.getElementById('view'), ctx=view.getContext('2d');
+const maskCanvas=document.createElement('canvas'), mc=maskCanvas.getContext('2d');
+let source=new Image(), originalMask=new Image(), strokes=[], active=null, identity=null, loaded=false, sequence=0;
+const send=(type,extra={})=>parent.postMessage({isStreamlitMessage:true,type,...extra},'*');
+const resize=()=>send('streamlit:setFrameHeight',{height:document.body.scrollHeight+8});
+function paint(){
+ if(!loaded)return;
+ const w=view.width,h=view.height;
+ mc.clearRect(0,0,w,h);mc.drawImage(originalMask,0,0,w,h);
+ for(const stroke of [...strokes,...(active?[active]:[])]){
+  mc.strokeStyle=mc.fillStyle=stroke.mode==='add'?'white':'black';
+  const r=stroke.radius*Math.min(w,h); mc.lineWidth=2*r;mc.lineCap='round';mc.lineJoin='round';
+  mc.beginPath();stroke.points.forEach(([x,y],i)=>i?mc.lineTo(x*(w-1),y*(h-1)):mc.moveTo(x*(w-1),y*(h-1)));mc.stroke();
+  for(const [x,y] of stroke.points){mc.beginPath();mc.arc(x*(w-1),y*(h-1),r,0,2*Math.PI);mc.fill();}
+ }
+ const data=mc.getImageData(0,0,w,h);
+ for(let i=0;i<data.data.length;i+=4){let alpha=data.data[i]>127?110:0;data.data[i]=103;data.data[i+1]=88;data.data[i+2]=216;data.data[i+3]=alpha;}
+ mc.putImageData(data,0,0);ctx.clearRect(0,0,w,h);ctx.drawImage(source,0,0,w,h);ctx.drawImage(maskCanvas,0,0);resize();
+}
+function point(e){const r=view.getBoundingClientRect();return [Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))];}
+view.onpointerdown=e=>{if(!loaded)return;view.setPointerCapture(e.pointerId);active={mode:document.getElementById('mode').value,radius:Number(document.getElementById('radius').value)/100,points:[point(e)]};paint();};
+view.onpointermove=e=>{if(active&&active.points.length<10000){active.points.push(point(e));paint();}};
+view.onpointerup=()=>{if(active){strokes.push(active);active=null;paint();}};
+view.onpointercancel=()=>{active=null;paint();};
+document.getElementById('undo').onclick=()=>{strokes.pop();paint();};
+document.getElementById('reset').onclick=()=>{strokes=[];paint();};
+document.getElementById('apply').onclick=()=>{send('streamlit:setComponentValue',{value:{strokes,revision:Date.now()+'-'+(++sequence)},dataType:'json'});document.getElementById('status').textContent=' 적용 요청됨';};
+window.addEventListener('message',async e=>{
+ if(e.data.type!=='streamlit:render')return;
+ const a=e.data.args;
+ if(identity===a.identity){resize();return;}
+ identity=a.identity;loaded=false;strokes=a.strokes||[];
+ source=new Image();originalMask=new Image();source.src=a.image;originalMask.src=a.mask;
+ await Promise.all([source.decode(),originalMask.decode()]);
+ const scale=Math.min(1,330/source.height,(window.innerWidth-8)/source.width);
+ view.width=maskCanvas.width=Math.max(1,Math.round(source.width*scale));
+ view.height=maskCanvas.height=Math.max(1,Math.round(source.height*scale));loaded=true;paint();
+});
+send('streamlit:componentReady',{apiVersion:1});resize();
+</script></html>

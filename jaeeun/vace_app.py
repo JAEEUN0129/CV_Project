@@ -18,6 +18,8 @@ from jaeeun.personal_color import classify_personal_color
 from jaeeun.vace.anchor_mask import build_anchor_mask
 from jaeeun.vace.anchor_selector import select_anchor
 from jaeeun.vace.color_candidates import PERSONAL_COLOR_PALETTES, build_color_candidates
+from jaeeun.vace.color_candidates import PALETTE_HEX, recolor_requested
+from jaeeun.vace.mask_editor import apply_strokes, render_mask_editor
 from jaeeun.vace.runner import VaceRun
 from jaeeun.vace.style_options import STYLE_OPTIONS, COLOR_OPTIONS, inputs_ready, hairstyle_prompt, requested_style_label
 from jaeeun.prepare_vace_mask_video import build_mask_video
@@ -416,6 +418,34 @@ with st.container(key="studio_body"):
                     if st.button(label, key=f"color_{color_id}", use_container_width=True):
                         st.session_state.selected_anchor = color_id
                         st.session_state.selected_preview = color_id
+                if st.session_state.vace_candidates:
+                    with st.expander("염색 영역 보정"):
+                        import numpy as np
+                        from PIL import Image
+
+                        requested = next(item for item in st.session_state.vace_candidates if item["id"] == "requested")
+                        source_path = Path(requested["path"])
+                        base_mask_path = source_path.with_name("anchor-requested-hair-mask.png")
+                        if base_mask_path.exists():
+                            editor_key = "mask_" + job_workspace().name
+                            event = render_mask_editor(source_path, base_mask_path,
+                                                       st.session_state.get(editor_key + "_strokes", []), editor_key)
+                            if event and event["revision"] != st.session_state.get(editor_key + "_revision"):
+                                try:
+                                    base_mask = np.array(Image.open(base_mask_path).convert("L")) > 0
+                                    corrected = apply_strokes(base_mask, event["strokes"])
+                                    for item in st.session_state.vace_candidates:
+                                        if item["id"] != "requested":
+                                            recolor_requested(source_path, corrected, PALETTE_HEX[item["id"]], Path(item["path"]))
+                                    Image.fromarray(corrected.astype(np.uint8) * 255).save(source_path.with_name("manual-hair-mask.png"))
+                                    st.session_state[editor_key + "_strokes"] = event["strokes"]
+                                    st.session_state[editor_key + "_revision"] = event["revision"]
+                                    st.session_state.video_result = None
+                                    st.rerun()
+                                except (ValueError, OSError, KeyError, TypeError) as error:
+                                    st.error(str(error))
+                        else:
+                            st.caption("새로 생성한 결과에서 염색 영역을 보정할 수 있습니다.")
 
     with main:
         if st.session_state.phase == "upload":
