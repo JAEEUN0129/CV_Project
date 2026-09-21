@@ -214,6 +214,8 @@ st.markdown(
       right:0;
       overflow:hidden;
       min-height:0!important;
+      padding-block:1.25rem!important;
+      box-sizing:border-box!important;
     }
     .st-key-studio_body > [data-testid="stHorizontalBlock"]{
       height:100%;
@@ -229,7 +231,7 @@ st.markdown(
       overflow-x:hidden;
       overscroll-behavior-y:contain;
       scrollbar-gutter:stable;
-      padding:.9rem 1rem 1.5rem!important;
+      padding:0 1rem!important;
       box-sizing:border-box;
     }
     .st-key-studio_body > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:last-child{
@@ -243,8 +245,8 @@ st.markdown(
       box-sizing:border-box!important;
     }
     .st-key-studio_body > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-left_rail){
-      padding-top:1.25rem!important;
-      padding-bottom:1.25rem!important;
+      padding-top:0!important;
+      padding-bottom:0!important;
     }
     [data-testid="stColumn"]:has(.st-key-left_rail) > [data-testid="stVerticalBlock"]{
       min-height:100%;
