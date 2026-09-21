@@ -11,7 +11,7 @@ from typing import Protocol
 
 class AnchorEditor(Protocol):
     def create(
-        self, source: Path, reference: Path, mask: Path | None, prompt: str, output: Path
+        self, source: Path, reference: Path | None, mask: Path | None, prompt: str, output: Path
     ) -> Path: ...
 
 
@@ -20,7 +20,7 @@ class ManualAnchorEditor:
     anchor: Path
 
     def create(
-        self, source: Path, reference: Path, mask: Path | None, prompt: str, output: Path
+        self, source: Path, reference: Path | None, mask: Path | None, prompt: str, output: Path
     ) -> Path:
         if not self.anchor.is_file():
             raise FileNotFoundError(f"Manual anchor not found: {self.anchor}")
@@ -37,18 +37,19 @@ class FluxAnchorEditor:
     edit_mode: str = "masked"
 
     def create(
-        self, source: Path, reference: Path, mask: Path | None, prompt: str, output: Path
+        self, source: Path, reference: Path | None, mask: Path | None, prompt: str, output: Path
     ) -> Path:
         if self.edit_mode == "masked" and mask is None:
             raise ValueError("FLUX anchor generation requires an anchor edit mask")
         command = [
             str(self.python), str(self.worker),
             "--source", str(source),
-            "--reference", str(reference),
             "--edit-mode", self.edit_mode,
             "--prompt", prompt,
             "--output", str(output),
         ]
+        if reference is not None:
+            command.extend(["--reference", str(reference)])
         if mask is not None:
             command.extend(["--mask", str(mask)])
         if self.cpu_offload:

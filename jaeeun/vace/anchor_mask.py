@@ -42,7 +42,7 @@ def build_anchor_mask(source: Path, output: Path, edit_type: str) -> Path:
         lower_kernel = np.ones((lower_kernel_height, 3), dtype=np.uint8)
         expanded |= cv2.dilate(hair.astype(np.uint8), lower_kernel) > 0
         result = expanded & ~face
-    elif edit_type in {"see_through_bangs", "curtain_bangs", "remove_bangs"}:
+    elif edit_type in {"see_through_bangs", "curtain_bangs", "remove_bangs", "custom"}:
         if "face" not in ids:
             raise ValueError("Human parser does not provide a face class")
         face = class_map == ids["face"]
@@ -62,9 +62,12 @@ def build_anchor_mask(source: Path, output: Path, edit_type: str) -> Path:
             forehead_bottom = face_top + (face_bottom - face_top + 1) * depth
             result |= face & (rows <= forehead_bottom)
         else:
-            ratio = 0.32 if edit_type == "see_through_bangs" else 0.25
+            ratio = 0.32 if edit_type in {"see_through_bangs", "custom"} else 0.25
             forehead_bottom = face_top + round((face_bottom - face_top + 1) * ratio)
             result |= face & (rows <= forehead_bottom)
+        if edit_type == "custom":
+            expanded = cv2.dilate(hair.astype(np.uint8), np.ones((31, 61), np.uint8)) > 0
+            result |= expanded & ~face
     elif edit_type == "wave":
         expanded = cv2.dilate(hair.astype(np.uint8), np.ones((31, 61), np.uint8)) > 0
         if "face" in ids:

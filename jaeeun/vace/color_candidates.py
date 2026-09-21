@@ -1,4 +1,4 @@
-"""Build three personal-colour hairstyle anchors for a VACE run."""
+"""Build requested and recommended hair-colour anchors for a VACE run."""
 
 from __future__ import annotations
 
@@ -44,14 +44,14 @@ PERSONAL_COLOR_PALETTES = {
 def _prompt(base_prompt: str, color: str) -> str:
     return (
         f"{base_prompt} Change the hair color to {color}. "
-        "Keep the exact hairstyle shape, length, texture, and bangs from the reference. "
+        "Follow the hairstyle instructions above, including selected attributes over reference attributes. "
         "Apply the color consistently across the hair with natural strands and shading."
     )
 
 
 def build_color_candidates(
     source: Path,
-    reference: Path,
+    reference: Path | None,
     mask: Path,
     output_dir: Path,
     personal_color: str,
@@ -59,10 +59,11 @@ def build_color_candidates(
     flux_worker: Path,
     base_prompt: str,
     cpu_offload: bool = True,
+    palette: tuple | None = None,
 ) -> list[HairColorCandidate]:
-    """Generate exactly three Flux anchors for one personal-colour result."""
+    """Generate the supplied palette, or three personal-colour recommendations."""
     try:
-        palette = PERSONAL_COLOR_PALETTES[personal_color]
+        palette = palette if palette is not None else PERSONAL_COLOR_PALETTES[personal_color]
     except KeyError as error:
         supported = ", ".join(sorted(PERSONAL_COLOR_PALETTES))
         raise ValueError(f"Unknown personal colour {personal_color!r}; use: {supported}") from error

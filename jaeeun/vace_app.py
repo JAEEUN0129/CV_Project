@@ -7,6 +7,8 @@ import hashlib
 import os
 import sys
 import tempfile
+import uuid
+import subprocess
 from pathlib import Path
 
 import streamlit as st
@@ -18,7 +20,7 @@ from jaeeun.vace.anchor_mask import build_anchor_mask
 from jaeeun.vace.anchor_selector import select_anchor
 from jaeeun.vace.color_candidates import PERSONAL_COLOR_PALETTES, build_color_candidates
 from jaeeun.vace.runner import VaceRun
-from jaeeun.vace.specs import EDIT_SPECS
+from jaeeun.vace.style_options import STYLE_OPTIONS, COLOR_OPTIONS, inputs_ready, hairstyle_prompt, candidate_palette
 from jaeeun.prepare_vace_mask_video import build_mask_video
 
 
@@ -63,7 +65,16 @@ def image_uri(path: str | Path) -> str:
 
 
 def color_meta(color_id: str) -> tuple[str, str, str]:
-    return COLOR_META.get(color_id, (color_id, color_id, "#8A8F98"))
+    custom = {"black": ("Black", "블랙", "#17191D"), "brown": ("Brown", "브라운", "#633F32"), "gray": ("Gray", "그레이", "#969696"), "red": ("Red", "레드", "#A53737")}
+    return COLOR_META.get(color_id, custom.get(color_id, (color_id, color_id, "#8A8F98")))
+
+
+def job_workspace() -> Path:
+    return Path(st.session_state.job_workspace)
+
+
+def active_palette() -> tuple:
+    return candidate_palette(st.session_state.personal_color_result["label"], st.session_state.get("style_options", {}).get("color"), PERSONAL_COLOR_PALETTES)
 
 
 def clear_from_upload_change(prefix: str) -> None:
@@ -77,7 +88,7 @@ def phase_number() -> int:
 
 
 def get_representative_frame() -> Path:
-    frame_path = Path(os.environ.get("VACE_WORKSPACE", "artifacts/jaeeun/vace-ui")) / "source-anchor-frame.png"
+    frame_path = job_workspace() / "source-anchor-frame.png"
     frame_path.parent.mkdir(parents=True, exist_ok=True)
     if not frame_path.exists():
         select_anchor(Path(st.session_state.source_path), frame_path)
@@ -86,37 +97,39 @@ def get_representative_frame() -> Path:
 
 
 def create_anchor_candidates() -> None:
-    workspace = Path(os.environ.get("VACE_WORKSPACE", "artifacts/jaeeun/vace-ui"))
+    workspace = job_workspace()
     frame = get_representative_frame()
     edit_type = st.session_state.get("edit_type", "wave")
     mask = workspace / f"anchor-mask-{edit_type}.png"
     build_anchor_mask(frame, mask, edit_type)
     generated = build_color_candidates(
         frame,
-        Path(st.session_state.reference_path),
+        Path(st.session_state.reference_path) if st.session_state.get("reference_path") else None,
         mask,
         workspace / "anchors",
         st.session_state.personal_color_result["label"],
         Path(os.environ.get("FLUX_PYTHON", "/root/flux-env/bin/python")),
         Path(os.environ.get("FLUX_WORKER", str(Path(__file__).parent / "vace" / "flux_worker.py"))),
         st.session_state.style_prompt,
+        palette=active_palette(),
     )
     st.session_state.vace_candidates = [
         {"id": item.color_id, "name": item.name, "prompt_color": item.prompt_color, "path": str(item.anchor)}
         for item in generated
     ]
-    st.session_state.selected_anchor = st.session_state.vace_candidates[0]["id"]
+    if st.session_state.selected_anchor not in {item["id"] for item in st.session_state.vace_candidates}:
+        st.session_state.selected_anchor = st.session_state.vace_candidates[0]["id"]
     st.session_state.selected_preview = st.session_state.selected_anchor
 
 
 def generate_video() -> None:
-    workspace = Path(os.environ.get("VACE_WORKSPACE", "artifacts/jaeeun/vace-ui"))
+    workspace = job_workspace()
     selected = next(item for item in st.session_state.vace_candidates if item["id"] == st.session_state.selected_anchor)
     mask_video = workspace / "hair-mask.mp4"
     masked_video = workspace / "source-masked.mp4"
-    build_mask_video(Path(st.session_state.source_path), mask_video, masked_video, edit_type=st.session_state.edit_type)
+    build_mask_video(Path(st.session_state.source_path), mask_video, masked_video, edit_type=st.session_state.edit_type, forehead_ratio=0.32)
     prompt = (
-        f"{st.session_state.style_prompt}. The final hair colour is {selected['prompt_color']}. "
+        f"Match the hairstyle shape, length, texture and bangs of the supplied anchor image. The final hair colour is {selected['prompt_color']}. "
         "Preserve the person's identity, face, skin, clothing, lighting, pose, camera motion, and background. "
         "Change only the hair inside the mask and keep the colour temporally consistent."
     )
@@ -189,8 +202,9 @@ st.markdown(
       display:none!important;
     }
 
-    /* 첫 번째 컬럼에 fallback 여백 적용 */
-    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:first-child{
+    [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"]{gap:0!important}
+    /* 왼쪽 패널에만 여백 적용 */
+    [data-testid="stColumn"]:has(.st-key-left_rail){
       padding-left:1.4rem!important;
       padding-right:1rem!important;
       box-sizing:border-box!important;
@@ -201,6 +215,9 @@ st.markdown(
       padding-left:0!important;
       padding-right:0!important;
       padding-top:.7rem!important;
+      max-height:calc(100dvh - 3.5rem);
+      overflow-y:auto;
+      padding-bottom:1rem;
       box-sizing:border-box!important;
     }
     .studio-header{
@@ -214,7 +231,7 @@ st.markdown(
       background:#fff;
       padding:0 1.25rem;
       box-sizing:border-box;
-      margin-top:-1.5rem!important; /* Streamlit이 남기는 24px 상단 공간 보정 */
+      margin-top:0!important;
     }.brand{display:flex;align-items:center;gap:.7rem}.brand-name{font-size:1rem;font-weight:750}.brand-subtitle{color:var(--muted);font-size:.68rem;margin-left:.25rem}
     .stepper{display:flex;align-items:center;gap:.5rem;color:#a1a1aa;font-size:.68rem;transform:none;margin-left:auto}.step{display:flex;align-items:center;gap:.3rem;white-space:nowrap}.step-dot{width:1.2rem;height:1.2rem;border-radius:50%;display:grid;place-items:center;background:#e4e4e7;color:#71717a;font-size:.6rem;font-weight:700}.step.active{color:var(--ink);font-weight:650}.step.active .step-dot{background:var(--accent);color:#fff}.step-line{width:1rem;height:1px;background:var(--line)}
     .rail{background:#fff;border-right:1px solid var(--line);padding:.7rem .9rem;min-height:calc(100vh - 3.5rem);overflow:visible}.rail-kicker{color:var(--accent);text-transform:uppercase;letter-spacing:.1em;font-size:.58rem;font-weight:800}.rail-copy{color:var(--muted);font-size:.76rem;line-height:1.45;margin:.42rem 0 .7rem}.section{border-top:1px solid #f0f0f2;padding:.45rem 0}.section-title{font-size:.68rem;font-weight:750;margin-bottom:.3rem}.color-section-title{margin-top:.1rem}.section-number{color:var(--accent);margin-right:.3rem}.helper{color:var(--muted);font-size:.62rem;line-height:1.35}.upload-summary{background:#f7f7f8;border:1px solid var(--line);border-radius:.6rem;padding:.4rem .5rem;font-size:.68rem}.upload-summary strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.upload-summary span{color:#35a06b;font-size:.62rem}
@@ -246,16 +263,21 @@ with left:
 
         if st.session_state.phase == "upload":
             st.markdown('<div class="section-title"><span class="section-number">01</span>Upload</div>', unsafe_allow_html=True)
-            style_prompt = st.text_input("원하는 헤어스타일", placeholder="예: 긴 웨이브 헤어, 시스루뱅 중단발", key="style_prompt_input")
-            reference_upload = st.file_uploader("원하는 스타일의 사진", type=["jpg", "jpeg", "png", "webp"], key="reference_upload")
-            source_upload = st.file_uploader("사용자 영상", type=["mp4", "mov"], key="source_upload")
-            if reference_upload and st.session_state.get("reference_digest") != digest(reference_upload):
-                st.session_state.reference_path = str(save_upload(reference_upload)); st.session_state.reference_digest = digest(reference_upload)
-            if source_upload and st.session_state.get("source_digest") != digest(source_upload):
-                st.session_state.source_path = str(save_upload(source_upload, ".mp4")); st.session_state.source_digest = digest(source_upload); clear_from_upload_change("source")
-            ready = bool(style_prompt.strip() and reference_upload and source_upload)
-            if st.button("입력 완료", type="primary", use_container_width=True, disabled=not ready):
-                st.session_state.style_prompt = style_prompt
+            options = {}
+            for field, label in (("bangs", "앞머리"), ("length", "길이"), ("wave", "웨이브")):
+                options[field] = st.selectbox(label, list(STYLE_OPTIONS[field]), index=None, placeholder="선택 안 함", key=f"style_{field}")
+            options["color"] = st.selectbox("컬러", list(COLOR_OPTIONS), index=None, placeholder="선택 안 함", key="style_color")
+            reference_upload = st.file_uploader("원하는 스타일의 사진 (선택)", type=["jpg", "jpeg", "png", "webp"], key="reference_upload")
+            source_upload = st.file_uploader("사용자 영상 (필수)", type=["mp4", "mov"], key="source_upload")
+            ready = inputs_ready(source_upload is not None, options, reference_upload is not None)
+            if st.button("완료", type="primary", use_container_width=True, disabled=not ready):
+                clear_from_upload_change("source")
+                root = Path(os.environ.get("VACE_WORKSPACE", "artifacts/jaeeun/vace-ui")).resolve()
+                st.session_state.job_workspace = str(root / uuid.uuid4().hex)
+                st.session_state.source_path = str(save_upload(source_upload))
+                st.session_state.reference_path = str(save_upload(reference_upload)) if reference_upload is not None else None
+                st.session_state.style_options = options
+                st.session_state.style_prompt = hairstyle_prompt(options, reference_upload is not None)
                 try:
                     frame = get_representative_frame()
                     checkpoint = os.environ.get("PERSONAL_COLOR_CHECKPOINT")
@@ -265,7 +287,7 @@ with left:
                     else:
                         st.session_state.personal_color_result = {"label": "summer_cool", "label_ko": COLOR_LABELS["summer_cool"], "confidence": None, "source": "기본 추천"}
                     st.session_state.phase = "color"
-                    st.session_state.edit_type = "wave"
+                    st.session_state.edit_type = "custom"
                     st.rerun()
                 except (RuntimeError, ValueError, OSError) as error:
                     st.error(str(error))
@@ -275,7 +297,7 @@ with left:
             confidence = f'<div class="confidence">Confidence <b>{result["confidence"]:.0%}</b></div>' if result.get("confidence") is not None else ''
             st.markdown(f'<div class="color-result"><strong>당신의 퍼스널컬러는 {result["label_ko"]}입니다.</strong><div class="confidence">{result.get("source", "분석 결과")}</div>{confidence}</div>', unsafe_allow_html=True)
             st.caption("추천 색상을 선택하면 오른쪽 Preview가 바뀝니다.")
-            for color_index, (color_id, _, prompt_color) in enumerate(PERSONAL_COLOR_PALETTES[result["label"]], start=1):
+            for color_index, (color_id, _, prompt_color) in enumerate(active_palette(), start=1):
                 english, korean, hex_color = color_meta(color_id)
                 if st.button(f"{color_index}.  {korean}  ·  {english}", key=f"color_{color_id}", use_container_width=True):
                     st.session_state.selected_anchor = color_id
@@ -285,12 +307,12 @@ with left:
                             with st.spinner("추천 컬러 Preview를 생성하는 중..."):
                                 create_anchor_candidates()
                             st.rerun()
-                        except (RuntimeError, ValueError, FileNotFoundError) as error:
+                        except (RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as error:
                             st.error(str(error))
 
 with main:
     if st.session_state.phase == "upload":
-        st.markdown('<div class="preview-zone"><div class="preview-toolbar"><div><div class="preview-label">Upload</div><div class="preview-title">입력을 완료하면 Color 단계가 시작됩니다.</div></div></div><div class="canvas"><div class="empty-canvas"><div class="empty-icon">✦</div><strong>왼쪽에서 원하는 스타일과 영상을 입력하세요.</strong><br>스타일 텍스트, 스타일 사진, 사용자 영상이 필요합니다.</div></div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="preview-zone"><div class="preview-toolbar"><div><div class="preview-label">Upload</div><div class="preview-title">입력을 완료하면 Color 단계가 시작됩니다.</div></div></div><div class="canvas"><div class="empty-canvas"><div class="empty-icon">✦</div><strong>왼쪽에서 원하는 스타일과 영상을 입력하세요.</strong><br>사용자 영상과 스타일 옵션 또는 참조 사진을 넣고 완료를 눌러주세요.</div></div></div>', unsafe_allow_html=True)
     elif st.session_state.phase == "color":
         selected = next((item for item in st.session_state.vace_candidates if item["id"] == st.session_state.selected_anchor), None)
         preview_path = selected["path"] if selected else st.session_state.get("representative_frame")
@@ -301,13 +323,13 @@ with main:
         st.markdown('<div class="thumb-heading"><strong>Recommended colors</strong><span>선택한 색상이 큰 Preview에 표시됩니다.</span></div>', unsafe_allow_html=True)
         thumbs = st.session_state.get("vace_candidates", [])
         if thumbs:
-            columns = st.columns(3)
+            columns = st.columns(len(thumbs))
             for column, item in zip(columns, thumbs):
                 with column:
                     selected_class = "selected" if item["id"] == st.session_state.selected_anchor else ""
                     st.markdown(f'<div class="thumb-card {selected_class}"><img src="{image_uri(item["path"])}" alt="{item["name"]}"><div class="thumb-name">{color_meta(item["id"])[0]}</div></div>', unsafe_allow_html=True)
         else:
-            st.caption("왼쪽 추천 색상을 선택하면 Flux Anchor 3장이 생성됩니다.")
+            st.caption("왼쪽에서 색상을 선택하면 헤어스타일 미리보기가 생성됩니다.")
         if st.session_state.vace_candidates and st.button("이 색상으로 동영상 생성", type="primary", use_container_width=True, key="generate_video"):
             st.session_state.phase = "video"
             try:
@@ -317,7 +339,7 @@ with main:
                 with st.spinner("동영상을 생성하는 중..."):
                     generate_video()
                 st.rerun()
-            except (RuntimeError, ValueError, FileNotFoundError, OSError) as error:
+            except (RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as error:
                 st.error(str(error))
     else:
         result_path = st.session_state.get("video_result")

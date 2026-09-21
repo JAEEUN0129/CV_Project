@@ -21,7 +21,7 @@ def _working_size(width: int, height: int, max_area: int = 1024 * 1024) -> tuple
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--reference", type=Path, required=True)
+    parser.add_argument("--reference", type=Path)
     parser.add_argument("--mask", type=Path)
     parser.add_argument(
         "--edit-mode", choices=("masked", "reference_only"), default="masked"
@@ -39,7 +39,7 @@ def main() -> None:
     if not torch.cuda.is_available():
         raise RuntimeError("FLUX anchor generation requires a CUDA GPU")
     source = Image.open(args.source).convert("RGB")
-    reference = Image.open(args.reference).convert("RGB")
+    reference = Image.open(args.reference).convert("RGB") if args.reference else None
     width, height = _working_size(*source.size)
     source_work = source.resize((width, height), Image.Resampling.LANCZOS)
     if args.edit_mode == "masked":
@@ -76,7 +76,7 @@ def main() -> None:
     }
     if args.edit_mode == "masked":
         prompt = (
-            "Use the reference image only for the target hairstyle. Keep the source person's "
+            "Follow the requested hairstyle attributes. Keep the source person's "
             "exact identity, pose, lighting, and background. Change only the white masked hair "
             "region. " + args.prompt
         )
@@ -84,19 +84,19 @@ def main() -> None:
             prompt=prompt,
             image=source_work,
             mask_image=mask_work,
-            image_reference=reference,
+            **({"image_reference": reference} if reference is not None else {}),
             **common_args,
         ).images[0]
     else:
         prompt = (
-            "Image 1 is the source person. Image 2 is the hairstyle reference. Apply only the "
-            "hairstyle shape, length, texture, and color from Image 2 to the person in Image 1. "
+            "Image 1 is the source person. If Image 2 is provided, use it as the hairstyle reference, "
+            "with explicit requested attributes taking priority. "
             "Keep the exact face identity, facial features, expression, pose, hands, clothing, "
             "lighting, camera framing, and background from Image 1. " + args.prompt
         )
         result = pipe(
             prompt=prompt,
-            image=[source_work, reference],
+            image=[source_work, reference] if reference is not None else [source_work],
             **common_args,
         ).images[0]
     result = result.resize(source.size, Image.Resampling.LANCZOS)

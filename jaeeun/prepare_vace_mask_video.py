@@ -71,6 +71,9 @@ def _frame_mask(
         forehead_bottom = face_top + round((face_bottom - face_top + 1) * forehead_ratio)
         forehead = face & (rows <= forehead_bottom)
     mask = hair | forehead
+    if edit_type == "custom":
+        expanded = cv2.dilate(hair.astype(np.uint8), np.ones((31, 61), np.uint8)) > 0
+        mask |= expanded & ~face
 
     # Join small gaps between the parsed hairline and the forehead band.
     kernel = np.ones((5, 5), dtype=np.uint8)
