@@ -20,7 +20,7 @@ from jaeeun.vace.anchor_mask import build_anchor_mask
 from jaeeun.vace.anchor_selector import select_anchor
 from jaeeun.vace.color_candidates import PERSONAL_COLOR_PALETTES, build_color_candidates
 from jaeeun.vace.runner import VaceRun
-from jaeeun.vace.style_options import STYLE_OPTIONS, COLOR_OPTIONS, inputs_ready, hairstyle_prompt, candidate_palette
+from jaeeun.vace.style_options import STYLE_OPTIONS, COLOR_OPTIONS, inputs_ready, hairstyle_prompt
 from jaeeun.prepare_vace_mask_video import build_mask_video
 
 
@@ -31,6 +31,7 @@ COLOR_LABELS = {
     "winter_cool": "겨울 쿨",
 }
 COLOR_META = {
+    "requested": ("요청한 스타일", "요청한 스타일", "#6758d8"),
     "honey_brown": ("Honey Brown", "허니 브라운", "#B8794E"),
     "caramel_brown": ("Caramel Brown", "캐러멜 브라운", "#A96C43"),
     "peach_brown": ("Peach Brown", "피치 브라운", "#C88467"),
@@ -74,7 +75,7 @@ def job_workspace() -> Path:
 
 
 def active_palette() -> tuple:
-    return candidate_palette(st.session_state.personal_color_result["label"], st.session_state.get("style_options", {}).get("color"), PERSONAL_COLOR_PALETTES)
+    return PERSONAL_COLOR_PALETTES[st.session_state.personal_color_result["label"]]
 
 
 def clear_from_upload_change(prefix: str) -> None:
@@ -112,13 +113,14 @@ def create_anchor_candidates() -> None:
         Path(os.environ.get("FLUX_WORKER", str(Path(__file__).parent / "vace" / "flux_worker.py"))),
         st.session_state.style_prompt,
         palette=active_palette(),
+        include_requested=True,
+        requested_color=st.session_state.get("style_options", {}).get("color"),
     )
     st.session_state.vace_candidates = [
         {"id": item.color_id, "name": item.name, "prompt_color": item.prompt_color, "path": str(item.anchor)}
         for item in generated
     ]
-    if st.session_state.selected_anchor not in {item["id"] for item in st.session_state.vace_candidates}:
-        st.session_state.selected_anchor = st.session_state.vace_candidates[0]["id"]
+    st.session_state.selected_anchor = "requested"
     st.session_state.selected_preview = st.session_state.selected_anchor
 
 
@@ -298,6 +300,28 @@ st.markdown(
       .thumb-heading{display:flex;justify-content:space-between;align-items:center;margin:.9rem 0 .5rem}.thumb-heading strong{font-size:.78rem}.thumb-heading span{color:var(--muted);font-size:.68rem}.thumb-card{border:2px solid transparent;border-radius:.7rem;background:#fff;padding:.25rem}.thumb-card.selected{border-color:var(--accent);box-shadow:0 0 0 3px rgba(103,88,216,.12)}.thumb-card img{width:100%;aspect-ratio:1.15;object-fit:cover;border-radius:.45rem}.thumb-name{font-size:.66rem;font-weight:700;padding:.3rem .15rem}.thumb-check{color:var(--accent);font-size:.62rem;font-weight:750}.selected-strip{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:.75rem;padding:.7rem .85rem;background:#fff;border:1px solid var(--line);border-radius:.7rem}.selected-strip strong{font-size:.8rem}.selected-strip span{display:block;color:var(--muted);font-size:.68rem;margin-top:.15rem}.stButton>button{border-radius:.55rem;min-height:2.45rem;font-weight:700}.stButton>button[kind="primary"]{background:var(--accent);border-color:var(--accent)}
     div[data-testid="stFileUploader"]{margin:0!important} div[data-testid="stFileUploader"] section{padding:.35rem .5rem!important;min-height:2.65rem!important} div[data-testid="stFileUploader"] small{font-size:.58rem!important} div[data-testid="stTextInput"]{margin:0!important} div[data-testid="stTextInput"] input{font-size:.75rem!important;padding:.45rem .55rem!important;height:2.2rem!important} .stCaption{font-size:.6rem!important;margin:.15rem 0!important} .stButton>button{min-height:2.05rem!important;font-size:.7rem!important;padding:.3rem .5rem!important}
     .preview-zone{padding:0;min-height:0;max-height:none;overflow:visible}
+    .canvas.color-canvas{
+      height:clamp(10rem, calc(100dvh - 23rem), 65dvh);
+      min-height:0!important;
+      box-sizing:border-box;
+    }
+    .thumb-heading{margin:.25rem 0}
+    .st-key-studio_body [class*="st-key-color_thumb_"] button{
+      height:clamp(5rem, 12dvh, 8rem);
+      padding:.3rem!important;
+      border-radius:.65rem;
+      background-repeat:no-repeat!important;
+      background-position:center!important;
+      background-size:contain!important;
+      align-items:flex-end;
+    }
+    .st-key-studio_body [class*="st-key-color_thumb_"] button p{
+      background:rgba(255,255,255,.94);
+      color:#18181b;
+      border-radius:.25rem;
+      padding:.1rem .4rem;
+      font-size:.65rem;
+    }
     @media(max-width:900px){.stepper{display:none}.rail{min-height:auto;border-right:0;border-bottom:1px solid var(--line)}.canvas{min-height:18rem}}
     @media(max-width:640px){
       .st-key-studio_body{overflow-y:auto;overscroll-behavior-y:contain}
@@ -364,15 +388,16 @@ with st.container(key="studio_body"):
                 st.markdown('<div class="section-title color-section-title"><span class="section-number">02</span>Color</div>', unsafe_allow_html=True)
                 confidence = f'<div class="confidence">Confidence <b>{result["confidence"]:.0%}</b></div>' if result.get("confidence") is not None else ''
                 st.markdown(f'<div class="color-result"><strong>당신의 퍼스널컬러는 {result["label_ko"]}입니다.</strong><div class="confidence">{result.get("source", "분석 결과")}</div>{confidence}</div>', unsafe_allow_html=True)
-                st.caption("추천 색상을 선택하면 오른쪽 Preview가 바뀝니다.")
-                for color_index, (color_id, _, prompt_color) in enumerate(active_palette(), start=1):
+                st.caption("요청한 스타일과 추천 컬러를 비교해보세요.")
+                for color_index, (color_id, _, prompt_color) in enumerate((("requested", "요청한 스타일", ""),) + active_palette()):
                     english, korean, hex_color = color_meta(color_id)
-                    if st.button(f"{color_index}.  {korean}  ·  {english}", key=f"color_{color_id}", use_container_width=True):
+                    label = "요청한 스타일" if color_id == "requested" else f"추천 {color_index}.  {korean}  ·  {english}"
+                    if st.button(label, key=f"color_{color_id}", use_container_width=True):
                         st.session_state.selected_anchor = color_id
                         st.session_state.selected_preview = color_id
                         if not st.session_state.vace_candidates:
                             try:
-                                with st.spinner("추천 컬러 Preview를 생성하는 중..."):
+                                with st.spinner("요청한 스타일과 추천 컬러 미리보기를 생성하는 중..."):
                                     create_anchor_candidates()
                                 st.rerun()
                             except (RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as error:
@@ -386,16 +411,28 @@ with st.container(key="studio_body"):
             preview_path = selected["path"] if selected else st.session_state.get("representative_frame")
             title = color_meta(selected["id"])[0] if selected else "Original Frame"
             st.markdown(f'<div class="preview-toolbar"><div><div class="preview-label">Color Preview</div><div class="preview-title">{title}</div></div><div class="helper">추천 색상을 선택해보세요.</div></div>', unsafe_allow_html=True)
-            if preview_path and Path(preview_path).exists(): st.markdown(f'<div class="canvas"><img src="{image_uri(preview_path)}" alt="{title}"></div>', unsafe_allow_html=True)
-            else: st.markdown('<div class="canvas"><div class="empty-canvas">색상 버튼을 누르면 Preview가 생성됩니다.</div></div>', unsafe_allow_html=True)
-            st.markdown('<div class="thumb-heading"><strong>Recommended colors</strong><span>선택한 색상이 큰 Preview에 표시됩니다.</span></div>', unsafe_allow_html=True)
+            if preview_path and Path(preview_path).exists(): st.markdown(f'<div class="canvas color-canvas"><img src="{image_uri(preview_path)}" alt="{title}"></div>', unsafe_allow_html=True)
+            else: st.markdown('<div class="canvas color-canvas"><div class="empty-canvas">색상 버튼을 누르면 Preview가 생성됩니다.</div></div>', unsafe_allow_html=True)
+            st.markdown('<div class="thumb-heading"><strong>요청한 스타일 · 추천 컬러</strong><span>사진을 눌러 비교해보세요.</span></div>', unsafe_allow_html=True)
             thumbs = st.session_state.get("vace_candidates", [])
             if thumbs:
                 columns = st.columns(len(thumbs))
                 for column, item in zip(columns, thumbs):
                     with column:
-                        selected_class = "selected" if item["id"] == st.session_state.selected_anchor else ""
-                        st.markdown(f'<div class="thumb-card {selected_class}"><img src="{image_uri(item["path"])}" alt="{item["name"]}"><div class="thumb-name">{color_meta(item["id"])[0]}</div></div>', unsafe_allow_html=True)
+                        is_selected = item["id"] == st.session_state.selected_anchor
+                        button_key = f"color_thumb_{item['id']}"
+                        border_color = "var(--accent)" if is_selected else "transparent"
+                        st.markdown(
+                            f'<style>.st-key-{button_key} button{{'
+                            f'background-image:url("{image_uri(item["path"])}")!important;'
+                            f'border:2px solid {border_color}!important;'
+                            '}</style>', unsafe_allow_html=True,
+                        )
+                        label = ("✓ " if is_selected else "") + color_meta(item["id"])[1]
+                        if st.button(label, key=button_key, use_container_width=True):
+                            st.session_state.selected_anchor = item["id"]
+                            st.session_state.selected_preview = item["id"]
+                            st.rerun()
             else:
                 st.caption("왼쪽에서 색상을 선택하면 헤어스타일 미리보기가 생성됩니다.")
             if st.session_state.vace_candidates and st.button("이 색상으로 동영상 생성", type="primary", use_container_width=True, key="generate_video"):

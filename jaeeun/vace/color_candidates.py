@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .anchor_editor import FluxAnchorEditor
+from .style_options import COLOR_OPTIONS
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,8 @@ def build_color_candidates(
     base_prompt: str,
     cpu_offload: bool = True,
     palette: tuple | None = None,
+    include_requested: bool = False,
+    requested_color: str | None = None,
 ) -> list[HairColorCandidate]:
     """Generate the supplied palette, or three personal-colour recommendations."""
     try:
@@ -71,6 +74,19 @@ def build_color_candidates(
     output_dir.mkdir(parents=True, exist_ok=True)
     editor = FluxAnchorEditor(flux_python, flux_worker, cpu_offload=cpu_offload)
     candidates = []
+    if include_requested:
+        if requested_color:
+            color = COLOR_OPTIONS[requested_color][2]
+            instruction = f"Set the hair color to {color}."
+        elif reference is not None:
+            color = "the same as in the supplied anchor image"
+            instruction = "Match the hair color of the hairstyle reference image."
+        else:
+            color = "the same as in the supplied anchor image"
+            instruction = "Preserve the original hair color of the source person."
+        output = output_dir / "anchor-requested.png"
+        editor.create(source, reference, mask, f"{base_prompt} {instruction}", output)
+        candidates.append(HairColorCandidate("requested", "요청한 스타일", color, output))
     for color_id, name, prompt_color in palette:
         output = output_dir / f"anchor-{personal_color}-{color_id}.png"
         editor.create(
