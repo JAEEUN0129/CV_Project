@@ -20,7 +20,7 @@ from jaeeun.vace.anchor_mask import build_anchor_mask
 from jaeeun.vace.anchor_selector import select_anchor
 from jaeeun.vace.color_candidates import PERSONAL_COLOR_PALETTES, build_color_candidates
 from jaeeun.vace.runner import VaceRun
-from jaeeun.vace.style_options import STYLE_OPTIONS, COLOR_OPTIONS, inputs_ready, hairstyle_prompt
+from jaeeun.vace.style_options import STYLE_OPTIONS, COLOR_OPTIONS, inputs_ready, hairstyle_prompt, requested_style_label
 from jaeeun.prepare_vace_mask_video import build_mask_video
 
 
@@ -67,8 +67,7 @@ def image_uri(path: str | Path) -> str:
 
 def color_meta(color_id: str) -> tuple[str, str, str]:
     if color_id == "requested":
-        color = st.session_state.get("style_options", {}).get("color")
-        label = f"요청한 스타일 ({color})" if color else "요청한 스타일"
+        label = requested_style_label(st.session_state.get("style_options", {}))
         return label, label, "#6758d8"
     custom = {"black": ("Black", "블랙", "#17191D"), "brown": ("Brown", "브라운", "#633F32"), "gray": ("Gray", "그레이", "#969696"), "red": ("Red", "레드", "#A53737")}
     return COLOR_META.get(color_id, custom.get(color_id, (color_id, color_id, "#8A8F98")))
@@ -106,7 +105,7 @@ def create_anchor_candidates() -> None:
     frame = get_representative_frame()
     edit_type = st.session_state.get("edit_type", "wave")
     mask = workspace / f"anchor-mask-{edit_type}.png"
-    build_anchor_mask(frame, mask, edit_type)
+    build_anchor_mask(frame, mask, edit_type, target_length=st.session_state.get("style_options", {}).get("length"))
     generated = build_color_candidates(
         frame,
         Path(st.session_state.reference_path) if st.session_state.get("reference_path") else None,
@@ -415,6 +414,7 @@ with st.container(key="studio_body"):
                 source_label = '<div class="confidence">AI 분석</div>' if result.get("source") == "AI 분석" else ''
                 st.markdown(f'<div class="color-result"><strong>당신의 퍼스널컬러는 {result["label_ko"]}입니다.</strong>{source_label}{confidence}</div>', unsafe_allow_html=True)
                 st.caption("요청한 스타일과 추천 컬러를 비교해보세요.")
+                st.caption("참조 사진 사용" if st.session_state.get("reference_path") else "참조 사진 없음 · 옵션으로 지정")
                 for color_index, (color_id, _, prompt_color) in enumerate((("requested", "요청한 스타일", ""),) + active_palette()):
                     english, korean, hex_color = color_meta(color_id)
                     label = korean if color_id == "requested" else f"추천 {color_index}.  {korean}  ·  {english}"

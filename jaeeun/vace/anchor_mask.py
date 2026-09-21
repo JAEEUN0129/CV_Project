@@ -12,7 +12,7 @@ from PIL import Image
 from ..models import HumanParser
 
 
-def build_anchor_mask(source: Path, output: Path, edit_type: str) -> Path:
+def build_anchor_mask(source: Path, output: Path, edit_type: str, target_length: str | None = None) -> Path:
     class_map, labels = HumanParser().predict(source)
     ids = {name.lower().replace(" ", "_"): class_id for class_id, name in labels.items()}
     if "hair" not in ids:
@@ -68,6 +68,21 @@ def build_anchor_mask(source: Path, output: Path, edit_type: str) -> Path:
         if edit_type == "custom":
             expanded = cv2.dilate(hair.astype(np.uint8), np.ones((31, 61), np.uint8)) > 0
             result |= expanded & ~face
+            if target_length in {"장발", "중간길이"}:
+                # Allocate space for new lengths below the original hair silhouette.
+                _, face_xs = np.where(face)
+                face_width = int(face_xs.max() - face_xs.min() + 1)
+                face_height = face_bottom - face_top + 1
+                depth = 1.4 if target_length == "장발" else 0.65
+                bottom = min(hair.shape[0] - 1, face_bottom + round(face_height * depth))
+                extension = ((rows >= face_top) & (rows <= bottom)
+                             & (columns >= face_xs.min() - round(face_width * 0.6))
+                             & (columns <= face_xs.max() + round(face_width * 0.6)))
+                protected = face.copy()
+                for part in ("hands", "arms"):
+                    if part in ids:
+                        protected |= class_map == ids[part]
+                result |= extension & ~protected
     elif edit_type == "wave":
         expanded = cv2.dilate(hair.astype(np.uint8), np.ones((31, 61), np.uint8)) > 0
         if "face" in ids:

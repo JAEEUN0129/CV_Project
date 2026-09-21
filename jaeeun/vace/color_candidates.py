@@ -51,15 +51,36 @@ PALETTE_HEX = {
 
 
 def requested_hair_mask(image: Path):
+    import numpy as np
+    from PIL import Image
+    from tempfile import TemporaryDirectory
     from ..models import HumanParser
 
-    class_map, labels = HumanParser().predict(image)
+    pixels = np.array(Image.open(image).convert("RGB"))
+    # Letterboxed portraits otherwise become extremely narrow at parser resolution.
+    nonblack = np.max(pixels, axis=2) > 8
+    columns = np.flatnonzero(nonblack.mean(axis=0) > 0.01)
+    rows = np.flatnonzero(nonblack.mean(axis=1) > 0.01)
+    if not len(columns) or not len(rows):
+        raise ValueError("요청한 스타일 이미지가 비어 있습니다.")
+    x0, x1 = int(columns[0]), int(columns[-1]) + 1
+    y0, y1 = int(rows[0]), int(rows[-1]) + 1
+    parser = HumanParser()
+    with TemporaryDirectory() as directory:
+        crop_path = Path(directory) / "portrait.png"
+        Image.fromarray(pixels[y0:y1, x0:x1]).save(crop_path)
+        class_map, labels = parser.predict(crop_path)
     hair_ids = [index for index, label in labels.items() if label.lower() == "hair"]
     if not hair_ids:
         raise ValueError("The parser does not provide a hair class.")
-    mask = class_map == hair_ids[0]
+    mask = np.zeros(pixels.shape[:2], dtype=bool)
+    mask[y0:y1, x0:x1] = class_map == hair_ids[0]
     if not mask.any():
         raise ValueError("요청한 스타일 이미지에서 머리 영역을 찾지 못했습니다.")
+    Image.fromarray(mask.astype(np.uint8) * 255).save(image.with_name("requested-hair-mask.png"))
+    overlay = pixels.copy()
+    overlay[mask] = (pixels[mask] * 0.5 + np.array([103, 88, 216]) * 0.5).astype(np.uint8)
+    Image.fromarray(overlay).save(image.with_name("requested-hair-overlay.png"))
     return mask
 
 

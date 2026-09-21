@@ -22,11 +22,22 @@ def hairstyle_prompt(options: dict, has_reference: bool) -> str:
     instructions = [f"Set the {key} to {values[options[key]]}."
                     for key, values in STYLE_OPTIONS.items() if options.get(key)]
     if has_reference:
-        instructions.insert(0, "Use the reference image for the target hairstyle. Explicit selected attributes override the reference; use the reference for unspecified hairstyle attributes.")
+        specified = ", ".join(key for key in STYLE_OPTIONS if options.get(key))
+        instructions.insert(0, "The text-selected attributes are mandatory. Use the reference ONLY for unspecified hairstyle attributes. "
+                            + (f"Do not copy the reference's {specified}; replace those attributes with the following instructions." if specified else "Match the reference hairstyle."))
     else:
         instructions.insert(0, "Edit the source person's hair using the selected attributes. Preserve unspecified hairstyle attributes from the source.")
+    if options.get("length") == "장발":
+        instructions.append("The hair must extend visibly below the shoulders toward the chest. Do not produce a bob or shoulder-length haircut.")
+    if options.get("wave") == "C컬":
+        instructions.append("Keep the upper lengths smooth and mostly straight, with a single inward C-shaped bend at the ends. Do not create S-waves, repeated waves or tight curls.")
     instructions.append("Preserve the source person's identity, face, expression, clothing and background.")
     return " ".join(instructions)
+
+
+def requested_style_label(options: dict) -> str:
+    selected = [options[key] for key in ("bangs", "length", "wave", "color") if options.get(key)]
+    return "요청한 스타일" + (f" ({' · '.join(selected)})" if selected else "")
 
 
 def candidate_palette(personal_color: str, requested_color: str | None, palettes: dict) -> tuple:
