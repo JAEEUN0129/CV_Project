@@ -177,6 +177,23 @@ def _prompt(base_prompt: str, color: str) -> str:
     )
 
 
+def complete_source_edit_mask(source: Path, mask: Path, output: Path) -> Path:
+    """Include source hair missed by the initial whole-body parser.
+
+    This mask is for replacement, never for recolouring: original hair outside
+    the new silhouette must be editable so it can become background/clothing.
+    """
+    import numpy as np
+    from PIL import Image
+
+    original_hair = requested_hair_mask(source)
+    edit = np.array(Image.open(mask).convert("L")) > 0
+    if edit.shape != original_hair.shape:
+        raise ValueError("Source hair and anchor edit mask sizes do not match.")
+    Image.fromarray((edit | original_hair).astype(np.uint8) * 255).save(output)
+    return output
+
+
 def build_color_candidates(
     source: Path,
     reference: Path | None,
@@ -213,10 +230,21 @@ def build_color_candidates(
             color = "the same as in the supplied anchor image"
             instruction = "Preserve the original hair color of the source person."
         output = output_dir / "anchor-requested.png"
+        replacement_mask = complete_source_edit_mask(
+            source, mask, output_dir / "source-complete-edit-mask.png"
+        )
         options = requested_options or {}
         needs_regions = any(options.get(key) for key in ("bangs", "wave", "length"))
         draft = output_dir / "anchor-requested-draft.png" if needs_regions else output
-        editor.create(source, reference, mask, f"{base_prompt} {instruction}", draft)
+        replacement_instruction = (
+            "Replace the entire original hairstyle, including all old strands at the neck, "
+            "shoulders and ends. Produce one coherent hairstyle, not a new hairstyle layered "
+            "on top of the old hair. Where the new haircut is shorter or narrower, remove "
+            "the old strands and reconstruct the revealed skin, clothing or background. "
+            "The mask includes old hair to remove; it is not the target hair silhouette."
+        )
+        editor.create(source, reference, replacement_mask,
+                      f"{base_prompt} {instruction} {replacement_instruction}", draft)
         current = draft
         if options.get("wave") or options.get("length"):
             _, body = regional_masks(current)

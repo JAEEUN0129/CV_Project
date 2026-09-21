@@ -31,7 +31,7 @@ def regional_prompt(options: dict, region: str) -> str:
         return BANGS_INSTRUCTIONS[options["bangs"]] + " Edit only the forehead fringe; preserve all side and lower hair." + preserve
     body_options = {key: value for key, value in options.items() if key in {"length", "wave"}}
     return (hairstyle_prompt(body_options, False)
-            + " Edit only the side and lower hair. The existing forehead fringe and top centre hair are locked and must not change." + preserve)
+            + " Edit only the side and lower hair. Remove old strands outside the requested haircut and reconstruct the revealed skin, clothing or background; do not leave a second layer of old hair below the new ends. The existing forehead fringe and top centre hair are locked and must not change." + preserve)
 
 
 def inputs_ready(has_video: bool, options: dict, has_reference: bool) -> bool:

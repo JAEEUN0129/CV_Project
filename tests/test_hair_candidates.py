@@ -9,7 +9,7 @@ import numpy as np
 from PIL import Image
 
 from jaeeun.vace.color_candidates import (
-    build_color_candidates, hair_mask_from_scores, recolor_requested,
+    build_color_candidates, hair_mask_from_scores, recolor_requested, complete_source_edit_mask,
 )
 from jaeeun.vace.style_options import hairstyle_prompt
 from jaeeun.vace.regional_edit import composite_region, regional_masks
@@ -17,6 +17,25 @@ from jaeeun.vace.color_candidates import merge_detail_mask
 
 
 class HairCandidatesTest(unittest.TestCase):
+    def test_original_hair_tips_are_editable_but_not_added_to_recolor_mask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            old_hair = np.zeros((60, 40), dtype=bool)
+            old_hair[10:55, 10:15] = True
+            initial = np.zeros_like(old_hair)
+            initial[10:30, 10:25] = True
+            Image.fromarray(initial.astype(np.uint8) * 255).save(root / "edit.png")
+            with patch("jaeeun.vace.color_candidates.requested_hair_mask", return_value=old_hair):
+                result = complete_source_edit_mask(root / "source.png", root / "edit.png", root / "complete.png")
+            completed = np.array(Image.open(result)) > 0
+            self.assertTrue(completed[30:55, 10:15].all())
+            np.testing.assert_array_equal(completed, old_hair | initial)
+            # Recolouring only uses final-image segmentation, not this edit mask.
+            source = root / "requested.png"
+            Image.new("RGB", (40, 60), "gray").save(source)
+            recolor_requested(source, initial, "#202A3A", root / "color.png")
+            self.assertTrue((np.array(Image.open(root / "color.png"))[40, 12] == [128, 128, 128]).all())
+
     def test_curtain_bangs_open_temples_without_editing_eyes(self):
         classes = np.ones((100, 100), dtype=np.uint8)
         classes[30:80, 30:70] = 2
