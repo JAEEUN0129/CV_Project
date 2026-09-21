@@ -17,6 +17,50 @@ from jaeeun.vace.color_candidates import merge_detail_mask
 
 
 class HairCandidatesTest(unittest.TestCase):
+    def test_reference_only_passes_reference_to_every_preview_without_postprocessing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch("jaeeun.vace.color_candidates.FluxAnchorEditor.create") as editor, patch(
+                "jaeeun.vace.color_candidates.complete_source_edit_mask"
+            ) as complete, patch("jaeeun.vace.color_candidates.regional_masks") as regions, patch(
+                "jaeeun.vace.color_candidates.requested_hair_mask"
+            ) as segment, patch("jaeeun.vace.color_candidates.recolor_requested") as recolor:
+                result = build_color_candidates(root / "source.png", root / "ref.png", root / "mask.png", root,
+                    "summer_cool", Path("python"), Path("worker"), hairstyle_prompt({}, True),
+                    include_requested=True, requested_options={"bangs": None, "wave": None})
+            self.assertEqual(len(result), 4)
+            self.assertEqual(editor.call_count, 4)
+            for call in editor.call_args_list:
+                self.assertEqual(call.args[:3], (root / "source.png", root / "ref.png", root / "mask.png"))
+            self.assertIn("Match the hair color of the hairstyle reference image", editor.call_args_list[0].args[3])
+            complete.assert_not_called()
+            regions.assert_not_called()
+            segment.assert_not_called()
+            recolor.assert_not_called()
+
+    def test_text_only_uses_original_single_pass_generation_for_each_preview(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            options = {"bangs": "커튼뱅", "length": "장발", "wave": "C컬"}
+            with patch("jaeeun.vace.color_candidates.FluxAnchorEditor.create") as editor, patch(
+                "jaeeun.vace.color_candidates.complete_source_edit_mask"
+            ) as complete, patch("jaeeun.vace.color_candidates.regional_masks") as regions, patch(
+                "jaeeun.vace.color_candidates.requested_hair_mask"
+            ) as segment, patch("jaeeun.vace.color_candidates.recolor_requested") as recolor:
+                result = build_color_candidates(root / "source.png", None, root / "mask.png", root,
+                    "summer_cool", Path("python"), Path("worker"), hairstyle_prompt(options, False),
+                    include_requested=True, requested_color="브라운", requested_options=options)
+            self.assertEqual(len(result), 4)
+            self.assertEqual(editor.call_count, 4)
+            for call in editor.call_args_list:
+                self.assertEqual(call.args[:3], (root / "source.png", None, root / "mask.png"))
+                self.assertIn("C-shaped", call.args[3])
+            self.assertIn("natural brown", editor.call_args_list[0].args[3])
+            complete.assert_not_called()
+            regions.assert_not_called()
+            segment.assert_not_called()
+            recolor.assert_not_called()
+
     def test_recolor_preserves_shadows_and_desaturates_reflections(self):
         import cv2
         with tempfile.TemporaryDirectory() as directory:

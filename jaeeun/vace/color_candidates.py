@@ -231,6 +231,23 @@ def build_color_candidates(
     output_dir.mkdir(parents=True, exist_ok=True)
     editor = FluxAnchorEditor(flux_python, flux_worker, cpu_offload=cpu_offload)
     candidates = []
+    has_options = bool(requested_color or any((requested_options or {}).values()))
+    if reference is None or not has_options:
+        # Restore single-input paths: one FLUX pass per preview using
+        # the supplied edit mask. No regional re-generation or pixel recolour.
+        if include_requested:
+            color = COLOR_OPTIONS[requested_color][2] if requested_color else "the same as in the supplied anchor image"
+            instruction = (f"Set the hair color to {color}." if requested_color
+                           else "Match the hair color of the hairstyle reference image." if reference is not None
+                           else "Preserve the original hair color of the source person.")
+            output = output_dir / "anchor-requested.png"
+            editor.create(source, reference, mask, f"{base_prompt} {instruction}", output)
+            candidates.append(HairColorCandidate("requested", "요청한 스타일", color, output))
+        for color_id, name, prompt_color in palette:
+            output = output_dir / f"anchor-{personal_color}-{color_id}.png"
+            editor.create(source, reference, mask, _prompt(base_prompt, prompt_color), output)
+            candidates.append(HairColorCandidate(color_id, name, prompt_color, output))
+        return candidates
     if include_requested:
         if requested_color:
             color = COLOR_OPTIONS[requested_color][2]
