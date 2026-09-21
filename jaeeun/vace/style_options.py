@@ -35,9 +35,10 @@ def hairstyle_prompt(options: dict, has_reference: bool) -> str:
     return " ".join(instructions)
 
 
-def requested_style_label(options: dict) -> str:
+def requested_style_label(options: dict, has_reference: bool = False) -> str:
     selected = [options[key] for key in ("bangs", "length", "wave", "color") if options.get(key)]
-    return "요청한 스타일" + (f" ({' · '.join(selected)})" if selected else "")
+    selected.append("스타일사진 O" if has_reference else "스타일사진 X")
+    return f"요청한 스타일 ({' · '.join(selected)})"
 
 
 def candidate_palette(personal_color: str, requested_color: str | None, palettes: dict) -> tuple:

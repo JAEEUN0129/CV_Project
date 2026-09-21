@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .anchor_editor import FluxAnchorEditor
-from .style_options import COLOR_OPTIONS
+from .style_options import COLOR_OPTIONS, hairstyle_prompt
 
 
 @dataclass(frozen=True)
@@ -65,7 +65,9 @@ def requested_hair_mask(image: Path):
         raise ValueError("요청한 스타일 이미지가 비어 있습니다.")
     x0, x1 = int(columns[0]), int(columns[-1]) + 1
     y0, y1 = int(rows[0]), int(rows[-1]) + 1
-    parser = HumanParser()
+    # A portrait-specific parser is used for generated head/shoulder images.
+    # Hair IDs are resolved from model labels, not shared with the body parser.
+    parser = HumanParser("jonathandinu/face-parsing")
     with TemporaryDirectory() as directory:
         crop_path = Path(directory) / "portrait.png"
         Image.fromarray(pixels[y0:y1, x0:x1]).save(crop_path)
@@ -132,6 +134,7 @@ def build_color_candidates(
     palette: tuple | None = None,
     include_requested: bool = False,
     requested_color: str | None = None,
+    requested_options: dict | None = None,
 ) -> list[HairColorCandidate]:
     """Generate the supplied palette, or three personal-colour recommendations."""
     try:
@@ -154,7 +157,25 @@ def build_color_candidates(
             color = "the same as in the supplied anchor image"
             instruction = "Preserve the original hair color of the source person."
         output = output_dir / "anchor-requested.png"
-        editor.create(source, reference, mask, f"{base_prompt} {instruction}", output)
+        refine_wave = bool((requested_options or {}).get("wave") and reference is not None)
+        draft = output_dir / "anchor-requested-draft.png" if refine_wave else output
+        editor.create(source, reference, mask, f"{base_prompt} {instruction}", draft)
+        if refine_wave:
+            import numpy as np
+            from PIL import Image
+
+            draft_hair = requested_hair_mask(draft)
+            # Include the existing edit area plus all newly generated hair.
+            refinement_mask = output_dir / "requested-refinement-mask.png"
+            original_mask = np.array(Image.open(mask).convert("L")) > 0
+            Image.fromarray((original_mask | draft_hair).astype(np.uint8) * 255).save(refinement_mask)
+            refinement_prompt = (
+                "Correct the hairstyle of this already edited person. "
+                + hairstyle_prompt(requested_options, False)
+                + " Preserve the hair color of this source image."
+            )
+            # Do not feed the conflicting reference curl pattern into the correction.
+            editor.create(draft, None, refinement_mask, refinement_prompt, output)
         candidates.append(HairColorCandidate("requested", "요청한 스타일", color, output))
         requested_anchor = output
         hair_mask = requested_hair_mask(requested_anchor)

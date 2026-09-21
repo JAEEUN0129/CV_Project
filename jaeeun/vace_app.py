@@ -67,7 +67,7 @@ def image_uri(path: str | Path) -> str:
 
 def color_meta(color_id: str) -> tuple[str, str, str]:
     if color_id == "requested":
-        label = requested_style_label(st.session_state.get("style_options", {}))
+        label = requested_style_label(st.session_state.get("style_options", {}), bool(st.session_state.get("reference_path")))
         return label, label, "#6758d8"
     custom = {"black": ("Black", "블랙", "#17191D"), "brown": ("Brown", "브라운", "#633F32"), "gray": ("Gray", "그레이", "#969696"), "red": ("Red", "레드", "#A53737")}
     return COLOR_META.get(color_id, custom.get(color_id, (color_id, color_id, "#8A8F98")))
@@ -118,6 +118,7 @@ def create_anchor_candidates() -> None:
         palette=active_palette(),
         include_requested=True,
         requested_color=st.session_state.get("style_options", {}).get("color"),
+        requested_options=st.session_state.get("style_options", {}),
     )
     st.session_state.vace_candidates = [
         {"id": item.color_id, "name": item.name, "prompt_color": item.prompt_color, "path": str(item.anchor)}
@@ -414,7 +415,6 @@ with st.container(key="studio_body"):
                 source_label = '<div class="confidence">AI 분석</div>' if result.get("source") == "AI 분석" else ''
                 st.markdown(f'<div class="color-result"><strong>당신의 퍼스널컬러는 {result["label_ko"]}입니다.</strong>{source_label}{confidence}</div>', unsafe_allow_html=True)
                 st.caption("요청한 스타일과 추천 컬러를 비교해보세요.")
-                st.caption("참조 사진 사용" if st.session_state.get("reference_path") else "참조 사진 없음 · 옵션으로 지정")
                 for color_index, (color_id, _, prompt_color) in enumerate((("requested", "요청한 스타일", ""),) + active_palette()):
                     english, korean, hex_color = color_meta(color_id)
                     label = korean if color_id == "requested" else f"추천 {color_index}.  {korean}  ·  {english}"
