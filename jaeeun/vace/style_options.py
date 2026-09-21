@@ -25,6 +25,11 @@ def hairstyle_prompt(options: dict, has_reference: bool) -> str:
         specified = ", ".join(key for key in STYLE_OPTIONS if options.get(key))
         instructions.insert(0, "The text-selected attributes are mandatory. Use the reference ONLY for unspecified hairstyle attributes. "
                             + (f"Do not copy the reference's {specified}; replace those attributes with the following instructions." if specified else "Match the reference hairstyle."))
+        for field in STYLE_OPTIONS:
+            if not options.get(field):
+                instructions.append(f"Copy the {field} from the reference image, not from the source person.")
+        if not options.get("bangs"):
+            instructions.append("Match the reference fringe, including its presence or absence, coverage, density and parting. If the reference has bangs, create those bangs over the forehead; do not retain an exposed source forehead.")
     else:
         instructions.insert(0, "Edit the source person's hair using the selected attributes. Preserve unspecified hairstyle attributes from the source.")
     if options.get("length") == "장발":
@@ -39,11 +44,3 @@ def requested_style_label(options: dict, has_reference: bool = False) -> str:
     selected = [options[key] for key in ("bangs", "length", "wave", "color") if options.get(key)]
     selected.append("스타일사진 O" if has_reference else "스타일사진 X")
     return f"요청한 스타일 ({' · '.join(selected)})"
-
-
-def candidate_palette(personal_color: str, requested_color: str | None, palettes: dict) -> tuple:
-    recommended = palettes[personal_color]
-    if not requested_color:
-        return recommended
-    selected = COLOR_OPTIONS[requested_color]
-    return (selected,) + tuple(item for item in recommended if item[0] != selected[0])

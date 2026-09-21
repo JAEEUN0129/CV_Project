@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import os
 import sys
 import tempfile
@@ -54,10 +53,6 @@ def save_upload(upload, suffix: str | None = None) -> Path:
         return Path(handle.name)
 
 
-def digest(upload) -> str:
-    return hashlib.sha256(upload.getvalue()).hexdigest()
-
-
 def image_uri(path: str | Path) -> str:
     suffix = Path(path).suffix.lower().lstrip(".") or "png"
     mime = "jpeg" if suffix in {"jpg", "jpeg"} else suffix
@@ -81,7 +76,7 @@ def active_palette() -> tuple:
     return PERSONAL_COLOR_PALETTES[st.session_state.personal_color_result["label"]]
 
 
-def clear_from_upload_change(prefix: str) -> None:
+def clear_from_upload_change() -> None:
     for key in ("representative_frame", "personal_color_result", "vace_candidates", "selected_anchor", "selected_preview", "video_result"):
         st.session_state.pop(key, None)
     st.session_state.phase = "upload"
@@ -385,7 +380,7 @@ with st.container(key="studio_body"):
                         '<span class="upload-generating-ring" aria-hidden="true"></span>'
                         '미리보기 생성 중...</div>', unsafe_allow_html=True,
                     )
-                    clear_from_upload_change("source")
+                    clear_from_upload_change()
                     root = Path(os.environ.get("VACE_WORKSPACE", "artifacts/jaeeun/vace-ui")).resolve()
                     st.session_state.job_workspace = str(root / uuid.uuid4().hex)
                     st.session_state.source_path = str(save_upload(source_upload))

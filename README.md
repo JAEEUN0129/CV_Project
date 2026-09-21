@@ -1,42 +1,39 @@
-# CV_Project — Segmentation 기반 헤어·의상 가상 피팅
+# AI Hair Studio
 
-사진이나 짧은 영상 속 인물의 **머리색·상의색을 바꾸거나, 헤어스타일 자체를 바꾸는** 웹 도구입니다.
+사용자 영상과 스타일 옵션 또는 참조 사진으로 요청한 스타일을 생성하고,
+퍼스널컬러 추천색을 비교한 뒤 VACE 영상을 생성합니다.
 
-## 기능
+## 실행
 
-| 기능 | 사진 | 영상 |
-|---|---|---|
-| 부위별 마스크 확인 | O | 첫 프레임만 |
-| 머리 색 변경 | O | O |
-| 상의 색 변경 | O | O |
-| 헤어스타일 변경 | O | O (정면 프레임만) |
+```bash
+python -m streamlit run jaeeun/vace_app.py --server.port 8501
+```
 
-색 변경은 원본 픽셀의 밝기와 머릿결을 그대로 두고 색조만 바꾸므로, 편집하지 않은 영역은
-원본과 픽셀 단위로 동일합니다. 헤어스타일 변경은 원하는 머리 모양이 담긴 **사진 한 장**을
-지정하면 그 모양과 색을 가져옵니다.
+`jaeeun/app.py`도 같은 화면을 실행합니다. [설치 안내](jaeeun/SETUP.md)를 참고하세요.
 
-## 모델
+## 구조
 
-| 모델 | 역할 | 라이선스 |
-|---|---|---|
-| fashn-ai/fashn-human-parser | 사람 부위 18종 구분 | 공개 |
-| SAM 2.1 Hiera Small | 영상에서 영역 추적 | Apache 2.0 |
-| HairFastGAN | 헤어스타일 변경 | MIT |
-| Stable Diffusion 2 Inpainting | (보류) 지운 자리 생성 | OpenRAIL++ |
+| 경로 | 역할 |
+|---|---|
+| `jaeeun/vace_app.py` | Upload → Color → Video UI |
+| `jaeeun/personal_color.py` | 퍼스널컬러 분류 |
+| `jaeeun/models.py` | 사람·얼굴 분할 어댑터 |
+| `jaeeun/vace/style_options.py` | 옵션·프롬프트·표시 문구 |
+| `jaeeun/vace/anchor_selector.py`, `anchor_mask.py` | 대표 프레임·편집 마스크 |
+| `jaeeun/vace/anchor_editor.py`, `flux_worker.py` | FLUX 호출·추론 |
+| `jaeeun/vace/color_candidates.py` | 요청 이미지 생성·추천색 변경 |
+| `jaeeun/prepare_vace_mask_video.py`, `jaeeun/vace/runner.py` | 영상 마스크·VACE 호출 |
+| `jaeeun/vace/experiment.py`, `specs.py`, `short_hair_mask.py` | 별도 CLI 실험 |
+| `vessl/` | GPU 실행 명세·실험 스크립트 |
+| `tests/` | 회귀 검사 |
+| `archive/legacy/` | 현재 웹에서 사용하지 않는 이전 구현 |
 
-## 시작하기
+FLUX로 요청 이미지를 만든 뒤 추천색은 같은 이미지의 머리 영역에서만 변경합니다.
+마스크 누락과 생성 모델의 옵션 반영은 실제 GPU 결과로 검증해야 합니다.
 
-내 컴퓨터에서의 설치와 실행은 [jaeeun/SETUP.md](jaeeun/SETUP.md)를 따르세요. 환경이 두 개이며,
-헤어스타일 환경은 없어도 나머지 기능은 정상 동작합니다.
+[파일 정리 목록](archive/legacy/README.md)에 이동 파일과 보존 파일을 기록했습니다.
+모델 가중치, 가상환경, 사용자 사진, 생성 결과는 삭제하지 않았습니다.
 
-헤어스타일 변경을 GPU 서버에서 돌리려면 [vessl/README.md](vessl/README.md)를 참고하세요.
-같은 작업이 10배 이상 빨라집니다.
-
-계획과 진행 상황은 [jaeeun/PROJECT_PLAN.md](jaeeun/PROJECT_PLAN.md)에 있습니다.
-
-## 알려진 제약
-
-- 그래픽 가속이 없는 환경에서 헤어스타일 변경은 사진 한 장에 2~5분 걸립니다.
-- 헤어스타일 변경은 얼굴이 정면에 가까워야 하며, 고개를 옆이나 뒤로 크게 돌린 프레임은
-  건너뜁니다. 결과는 얼굴을 정사각형으로 잘라낸 화면으로 나옵니다.
-- 인물이 담긴 원본 영상과 모델 가중치는 저장소에 포함되지 않습니다.
+```bash
+python -m unittest discover -s tests
+```

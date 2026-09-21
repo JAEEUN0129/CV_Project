@@ -50,6 +50,34 @@ PALETTE_HEX = {
 }
 
 
+def hair_mask_from_scores(class_map, labels, probabilities):
+    """Include uncertain strands only when connected to confident hair."""
+    import cv2
+    import numpy as np
+
+    hair_ids = [index for index, label in labels.items() if label.lower() == "hair"]
+    if not hair_ids:
+        raise ValueError("The parser does not provide a hair class.")
+    hair_id = hair_ids[0]
+    core = class_map == hair_id
+    hair_probability = probabilities[hair_id]
+    protected_names = {"skin", "face", "nose", "l_eye", "r_eye", "l_brow", "r_brow",
+                       "mouth", "u_lip", "l_lip", "l_ear", "r_ear", "neck", "cloth", "hat",
+                       "ear_r", "neck_l", "eye_g"}
+    protected_ids = [i for i, name in labels.items() if name.lower() in protected_names]
+    protected = (probabilities[protected_ids].sum(axis=0) >= 0.65
+                 if protected_ids else np.zeros_like(core))
+    # Only locally connected ambiguous hair pixels qualify; do not dilate into
+    # known skin/clothes or include detached background predictions.
+    radius = max(2, round(min(core.shape) * 0.025))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * radius + 1, 2 * radius + 1))
+    nearby = cv2.dilate(core.astype(np.uint8), kernel) > 0
+    eligible = core | ((hair_probability >= 0.20) & nearby & ~protected)
+    _, components = cv2.connectedComponents(eligible.astype(np.uint8), connectivity=8)
+    connected_ids = np.unique(components[core])
+    return np.isin(components, connected_ids[connected_ids != 0])
+
+
 def requested_hair_mask(image: Path):
     import numpy as np
     from PIL import Image
@@ -71,18 +99,15 @@ def requested_hair_mask(image: Path):
     with TemporaryDirectory() as directory:
         crop_path = Path(directory) / "portrait.png"
         Image.fromarray(pixels[y0:y1, x0:x1]).save(crop_path)
-        class_map, labels = parser.predict(crop_path)
-    hair_ids = [index for index, label in labels.items() if label.lower() == "hair"]
-    if not hair_ids:
-        raise ValueError("The parser does not provide a hair class.")
+        class_map, labels, probabilities = parser.predict(crop_path, return_probabilities=True)
     mask = np.zeros(pixels.shape[:2], dtype=bool)
-    mask[y0:y1, x0:x1] = class_map == hair_ids[0]
+    mask[y0:y1, x0:x1] = hair_mask_from_scores(class_map, labels, probabilities)
     if not mask.any():
         raise ValueError("요청한 스타일 이미지에서 머리 영역을 찾지 못했습니다.")
-    Image.fromarray(mask.astype(np.uint8) * 255).save(image.with_name("requested-hair-mask.png"))
+    Image.fromarray(mask.astype(np.uint8) * 255).save(image.with_name(f"{image.stem}-hair-mask.png"))
     overlay = pixels.copy()
     overlay[mask] = (pixels[mask] * 0.5 + np.array([103, 88, 216]) * 0.5).astype(np.uint8)
-    Image.fromarray(overlay).save(image.with_name("requested-hair-overlay.png"))
+    Image.fromarray(overlay).save(image.with_name(f"{image.stem}-hair-overlay.png"))
     return mask
 
 
@@ -104,7 +129,9 @@ def recolor_requested(image: Path, mask, color: str, output: Path) -> Path:
     edited[..., 1:] = target[1:]
     rgb_edit = cv2.cvtColor(edited, cv2.COLOR_LAB2RGB)
     # Feather inward only, so skin/background pixels never change.
-    alpha = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), 1.2) * mask
+    # A strong interior blend prevents narrow hair tips from retaining the old
+    # colour merely because blur averages their mask with the background.
+    alpha = np.maximum(cv2.GaussianBlur(mask.astype(np.float32), (0, 0), 1.2), 0.85) * mask
     blended = source * (1 - alpha[..., None]) + rgb_edit * 255 * alpha[..., None]
     result = source.copy()
     result[mask] = np.clip(np.rint(blended[mask]), 0, 255).astype(np.uint8)
@@ -171,11 +198,11 @@ def build_color_candidates(
             Image.fromarray((original_mask | draft_hair).astype(np.uint8) * 255).save(refinement_mask)
             refinement_prompt = (
                 "Correct the hairstyle of this already edited person. "
-                + hairstyle_prompt(requested_options, False)
+                + hairstyle_prompt(requested_options, True)
                 + " Preserve the hair color of this source image."
             )
-            # Do not feed the conflicting reference curl pattern into the correction.
-            editor.create(draft, None, refinement_mask, refinement_prompt, output)
+            # Unselected attributes (notably bangs) still belong to the reference.
+            editor.create(draft, reference, refinement_mask, refinement_prompt, output)
         candidates.append(HairColorCandidate("requested", "요청한 스타일", color, output))
         requested_anchor = output
         hair_mask = requested_hair_mask(requested_anchor)
