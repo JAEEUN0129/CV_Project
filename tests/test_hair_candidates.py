@@ -13,7 +13,6 @@ from jaeeun.vace.color_candidates import (
 )
 from jaeeun.vace.style_options import hairstyle_prompt
 from jaeeun.vace.regional_edit import composite_region, regional_masks
-from jaeeun.vace.mask_editor import apply_strokes
 from jaeeun.vace.color_candidates import merge_detail_mask
 
 
@@ -23,6 +22,7 @@ class HairCandidatesTest(unittest.TestCase):
         classes[30:80, 30:70] = 2
         classes[45:48, 35:65] = 3
         classes[50:53, 35:65] = 4
+        classes[45:50, 48:52] = 1  # old fringe below the highest brow
         labels = {0: "background", 1: "hair", 2: "skin", 3: "l_brow", 4: "l_eye"}
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "source.png"
@@ -31,8 +31,9 @@ class HairCandidatesTest(unittest.TestCase):
                 parser.return_value.predict.return_value = (classes, labels)
                 curtain, body = regional_masks(source, "커튼뱅")
                 choppy, _ = regional_masks(source, "처피뱅")
-            self.assertTrue(curtain[50, 29])
-            self.assertFalse(choppy[50, 29])
+            self.assertTrue(curtain[55, 29])
+            self.assertFalse(choppy[55, 29])
+            self.assertTrue(curtain[45:50, 48:52].all())
             self.assertFalse(curtain[classes == 3].any())
             self.assertFalse(curtain[classes == 4].any())
             self.assertFalse((curtain & body).any())
@@ -110,16 +111,29 @@ class HairCandidatesTest(unittest.TestCase):
             self.assertTrue((result[~mask] == [255, 0, 0]).all())
             self.assertTrue((result[mask] == [0, 0, 255]).all())
 
-    def test_brush_add_erase_reset(self):
-        base = np.zeros((100, 100), dtype=bool)
-        add = {"mode": "add", "radius": .03, "points": [[.2, .2], [.2, .7]]}
-        erase = {"mode": "erase", "radius": .03, "points": [[.2, .2]]}
-        corrected = apply_strokes(base, [add, erase])
-        self.assertFalse(corrected[20, 20])
-        self.assertTrue(corrected[50, 20])
-        np.testing.assert_array_equal(apply_strokes(base, []), base)
-        with self.assertRaises(ValueError):
-            apply_strokes(base, [{**add, "points": [[2, .5]]}])
+    def test_explicit_bangs_are_corrected_after_body_without_reference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.png"
+            Image.new("RGB", (40, 60), "gray").save(source)
+            fringe = np.zeros((60, 40), dtype=bool)
+            fringe[:20] = True
+            def generate(src, ref, mask, prompt, output):
+                Image.new("RGB", (40, 60), "gray").save(output)
+            options = {"bangs": "커튼뱅", "length": "단발", "wave": "생머리"}
+            with patch("jaeeun.vace.color_candidates.FluxAnchorEditor.create", side_effect=generate) as editor, patch(
+                "jaeeun.vace.color_candidates.regional_masks", return_value=(fringe, ~fringe)
+            ), patch("jaeeun.vace.color_candidates.requested_hair_mask", return_value=np.ones((60, 40), dtype=bool)):
+                build_color_candidates(source, source, source, root, "summer_cool",
+                                       Path("python"), Path("worker"), hairstyle_prompt(options, True),
+                                       include_requested=True, requested_options=options)
+            self.assertEqual(editor.call_count, 3)
+            body, bangs = [call.args for call in editor.call_args_list[1:]]
+            self.assertIsNone(body[1])
+            self.assertIsNone(bangs[1])
+            self.assertEqual(bangs[0].name, "anchor-body.png")
+            self.assertIn("connect continuously", bangs[3])
+            self.assertTrue(np.array(Image.open(bangs[2]))[:20].all())
 
     def test_detail_mask_only_adds_connected_hair_and_protects_skin(self):
         base = np.zeros((20, 20), dtype=bool)

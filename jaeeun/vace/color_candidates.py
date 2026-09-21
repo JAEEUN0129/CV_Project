@@ -218,14 +218,15 @@ def build_color_candidates(
         draft = output_dir / "anchor-requested-draft.png" if needs_regions else output
         editor.create(source, reference, mask, f"{base_prompt} {instruction}", draft)
         current = draft
-        if options.get("bangs"):
-            fringe, _ = regional_masks(current, options["bangs"])
-            current = edit_region(editor, current, fringe, regional_prompt(options, "bangs"),
-                                  output_dir / "anchor-bangs.png")
         if options.get("wave") or options.get("length"):
             _, body = regional_masks(current)
             current = edit_region(editor, current, body, regional_prompt(options, "body"),
                                   output_dir / "anchor-body.png")
+        # Resolve the part/fringe last so a later body edit cannot clip it.
+        if options.get("bangs"):
+            fringe, _ = regional_masks(current, options["bangs"])
+            current = edit_region(editor, current, fringe, regional_prompt(options, "bangs"),
+                                  output_dir / "anchor-bangs.png")
         if current != output:
             shutil.copy2(current, output)
         candidates.append(HairColorCandidate("requested", "요청한 스타일", color, output))

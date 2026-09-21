@@ -34,8 +34,13 @@ def regional_masks(image: Path, bangs_style: str | None = None) -> tuple[np.ndar
     height = int(ys.max() - ys.min() + 1)
     brow_ids = [ids[n] for n in ("l_brow", "r_brow") if n in ids]
     brow_y = np.where(np.isin(classes, brow_ids))[0]
-    # Protect eyebrows/eyes; the forehead and existing fringe above them are editable.
-    bottom = int(brow_y.min()) if len(brow_y) else int(ys.min() + height * .28)
+    # A fringe can extend BELOW the highest eyebrow. Cutting the mask at
+    # brow_y.min() leaves a horizontal strip of old bangs after opening a part.
+    eye_ids = [ids[n] for n in ("l_eye", "r_eye") if n in ids]
+    eye_y = np.where(np.isin(classes, eye_ids))[0]
+    bottom = (int(np.median(eye_y)) + 1 if len(eye_y)
+              else int(brow_y.max() + max(2, height * .08)) if len(brow_y)
+              else int(ys.min() + height * .38))
     rows, cols = np.indices(classes.shape)
     fringe_zone = ((cols >= xs.min() - width * .22) & (cols <= xs.max() + width * .22)
                    & (rows >= max(0, ys.min() - height * .65)) & (rows < bottom))
@@ -46,7 +51,8 @@ def regional_masks(image: Path, bangs_style: str | None = None) -> tuple[np.ndar
                  & (rows >= bottom) & (rows < bottom + height * .35))
     hair = classes == ids["hair"]
     protected_ids = [ids[n] for n in ("nose", "l_eye", "r_eye", "l_brow", "r_brow",
-                                     "mouth", "u_lip", "l_lip", "neck", "cloth", "ear_r") if n in ids]
+                                     "mouth", "u_lip", "l_lip", "neck", "cloth", "ear_r",
+                                     "l_ear", "r_ear") if n in ids]
     fringe = (fringe_zone | (side_zone if bangs_style == "커튼뱅" else False)) & ~np.isin(classes, protected_ids)
     radius = max(3, round(width * .12))
     expanded = cv2.dilate(hair.astype(np.uint8), cv2.getStructuringElement(

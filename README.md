@@ -13,12 +13,10 @@ python -m streamlit run jaeeun/vace_app.py --server.port 8501
 
 ## 구조
 
-선택한 앞머리는 앞머리 영역에서, 길이·웨이브는 옆·아래 머리 영역에서 별도로 보정합니다.
+길이·웨이브는 옆·아래 머리 영역에서 보정하고, 선택한 앞머리를 마지막에 별도로 보정합니다.
 부분 보정에는 참조 사진을 다시 넣지 않으며, 편집 영역 밖 픽셀은 복원합니다.
 옵션에 따라 요청 스타일 생성에 FLUX 추론이 최대 3회 필요합니다.
 추천색은 최종 요청 이미지의 머리색만 변경합니다.
-자동 분할이 머리끝을 놓치면 Color 화면의 **염색 영역 보정**에서 브러시로
-영역을 추가·제거한 뒤 **보정 적용**을 누르세요. 세 추천색에 함께 적용됩니다.
 
 | 경로 | 역할 |
 |---|---|
@@ -30,7 +28,6 @@ python -m streamlit run jaeeun/vace_app.py --server.port 8501
 | `jaeeun/vace/anchor_editor.py`, `flux_worker.py` | FLUX 호출·추론 |
 | `jaeeun/vace/color_candidates.py` | 요청 이미지 생성·추천색 변경 |
 | `jaeeun/vace/regional_edit.py` | 앞머리·옆머리 분리 편집 및 보호 영역 복원 |
-| `jaeeun/vace/mask_editor.py`, `mask_brush/` | 수동 염색 마스크 보정 |
 | `jaeeun/prepare_vace_mask_video.py`, `jaeeun/vace/runner.py` | 영상 마스크·VACE 호출 |
 | `jaeeun/vace/experiment.py`, `specs.py`, `short_hair_mask.py` | 별도 CLI 실험 |
 | `vessl/` | GPU 실행 명세·실험 스크립트 |

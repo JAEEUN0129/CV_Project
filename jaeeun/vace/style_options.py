@@ -24,6 +24,10 @@ BANGS_INSTRUCTIONS = {
 def regional_prompt(options: dict, region: str) -> str:
     preserve = " Preserve this image's exact identity, facial features, hair colour, lighting and background."
     if region == "bangs":
+        if options["bangs"] == "커튼뱅":
+            return (BANGS_INSTRUCTIONS["커튼뱅"]
+                    + " Edit the complete front fringe and temple sections together. The exposed centre forehead must connect continuously from the centre part down to the eyebrows, without an isolated skin hole or a remaining horizontal strip of old bangs. Blend the swept sections into the existing side hair; preserve the lower haircut."
+                    + preserve)
         return BANGS_INSTRUCTIONS[options["bangs"]] + " Edit only the forehead fringe; preserve all side and lower hair." + preserve
     body_options = {key: value for key, value in options.items() if key in {"length", "wave"}}
     return (hairstyle_prompt(body_options, False)
