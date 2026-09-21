@@ -240,6 +240,31 @@ st.markdown(
       padding-right:1rem!important;
       box-sizing:border-box!important;
     }
+    .st-key-studio_body > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:has(.st-key-left_rail){
+      padding-top:1.25rem!important;
+      padding-bottom:1.25rem!important;
+    }
+    [data-testid="stColumn"]:has(.st-key-left_rail) > [data-testid="stVerticalBlock"]{
+      min-height:100%;
+      gap:0!important;
+    }
+    .st-key-left_rail{
+      flex-shrink:0;
+      margin-block:auto;
+    }
+    .st-key-left_rail .reference-upload-label,
+    .st-key-left_rail [data-testid="stFileUploader"] [data-testid="stWidgetLabel"] p{
+      font-size:.875rem!important;
+      font-weight:400;
+      line-height:1.5;
+      margin:0;
+    }
+    .st-key-left_rail .reference-upload-help{
+      font-size:.7rem!important;
+      line-height:1.4;
+      color:var(--muted);
+      margin:.2rem 0 0;
+    }
 
     /* 왼쪽 컨트롤 패널 전용 여백 */
     .st-key-left_rail{
@@ -305,8 +330,11 @@ with st.container(key="studio_body"):
                 for field, label in (("bangs", "앞머리"), ("length", "길이"), ("wave", "웨이브"), ("color", "컬러")):
                     choices = COLOR_OPTIONS if field == "color" else STYLE_OPTIONS[field]
                     options[field] = st.selectbox(label, list(choices), index=None, placeholder="선택 안 함", key=f"style_{field}")
-                st.markdown("원하는 스타일 사진 (선택)")
-                st.caption("옵션에 없는 스타일은 사진으로 지정하세요.")
+                st.markdown(
+                    '<div class="reference-upload-label">원하는 스타일 사진 (선택)</div>'
+                    '<div class="reference-upload-help">옵션에 없는 스타일은 사진으로 지정하세요.</div>',
+                    unsafe_allow_html=True,
+                )
                 reference_upload = st.file_uploader("원하는 스타일 사진 (선택)", type=["jpg", "jpeg", "png", "webp"], key="reference_upload", label_visibility="collapsed")
                 source_upload = st.file_uploader("사용자 영상 (필수)", type=["mp4", "mov"], key="source_upload")
                 ready = inputs_ready(source_upload is not None, options, reference_upload is not None)
