@@ -66,6 +66,10 @@ def image_uri(path: str | Path) -> str:
 
 
 def color_meta(color_id: str) -> tuple[str, str, str]:
+    if color_id == "requested":
+        color = st.session_state.get("style_options", {}).get("color")
+        label = f"요청한 스타일 ({color})" if color else "요청한 스타일"
+        return label, label, "#6758d8"
     custom = {"black": ("Black", "블랙", "#17191D"), "brown": ("Brown", "브라운", "#633F32"), "gray": ("Gray", "그레이", "#969696"), "red": ("Red", "레드", "#A53737")}
     return COLOR_META.get(color_id, custom.get(color_id, (color_id, color_id, "#8A8F98")))
 
@@ -302,6 +306,12 @@ st.markdown(
       .thumb-heading{display:flex;justify-content:space-between;align-items:center;margin:.9rem 0 .5rem}.thumb-heading strong{font-size:.78rem}.thumb-heading span{color:var(--muted);font-size:.68rem}.thumb-card{border:2px solid transparent;border-radius:.7rem;background:#fff;padding:.25rem}.thumb-card.selected{border-color:var(--accent);box-shadow:0 0 0 3px rgba(103,88,216,.12)}.thumb-card img{width:100%;aspect-ratio:1.15;object-fit:cover;border-radius:.45rem}.thumb-name{font-size:.66rem;font-weight:700;padding:.3rem .15rem}.thumb-check{color:var(--accent);font-size:.62rem;font-weight:750}.selected-strip{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:.75rem;padding:.7rem .85rem;background:#fff;border:1px solid var(--line);border-radius:.7rem}.selected-strip strong{font-size:.8rem}.selected-strip span{display:block;color:var(--muted);font-size:.68rem;margin-top:.15rem}.stButton>button{border-radius:.55rem;min-height:2.45rem;font-weight:700}.stButton>button[kind="primary"]{background:var(--accent);border-color:var(--accent)}
     div[data-testid="stFileUploader"]{margin:0!important} div[data-testid="stFileUploader"] section{padding:.35rem .5rem!important;min-height:2.65rem!important} div[data-testid="stFileUploader"] small{font-size:.58rem!important} div[data-testid="stTextInput"]{margin:0!important} div[data-testid="stTextInput"] input{font-size:.75rem!important;padding:.45rem .55rem!important;height:2.2rem!important} .stCaption{font-size:.6rem!important;margin:.15rem 0!important} .stButton>button{min-height:2.05rem!important;font-size:.7rem!important;padding:.3rem .5rem!important}
     .preview-zone{background:transparent;padding:0;min-height:0;max-height:none;overflow:visible}
+    .upload-generating{display:flex;align-items:center;justify-content:center;gap:.5rem;
+      min-height:2.05rem;padding:.3rem .5rem;border-radius:.55rem;background:var(--accent);
+      color:white;font-size:.7rem;font-weight:700}
+    .upload-generating-ring{width:.85rem;height:.85rem;border:2px solid #ffffff66;
+      border-top-color:white;border-radius:50%;animation:upload-spin .8s linear infinite}
+    @keyframes upload-spin{to{transform:rotate(360deg)}}
     [data-testid="stColumn"]:has(.preview-zone){background:#f7f7f8!important}
     .canvas.color-canvas{
       height:clamp(10rem, calc(100dvh - 23rem), 65dvh);
@@ -365,7 +375,16 @@ with st.container(key="studio_body"):
                 reference_upload = st.file_uploader("원하는 스타일 사진 (선택)", type=["jpg", "jpeg", "png", "webp"], key="reference_upload", label_visibility="collapsed")
                 source_upload = st.file_uploader("사용자 영상 (필수)", type=["mp4", "mov"], key="source_upload")
                 ready = inputs_ready(source_upload is not None, options, reference_upload is not None)
-                if st.button("완료", type="primary", use_container_width=True, disabled=not ready):
+                action_slot = st.empty()
+                upload_error = st.session_state.pop("upload_error", None)
+                if upload_error:
+                    st.error(upload_error)
+                if action_slot.button("완료", type="primary", use_container_width=True, disabled=not ready):
+                    action_slot.markdown(
+                        '<div class="upload-generating" role="status" aria-live="polite">'
+                        '<span class="upload-generating-ring" aria-hidden="true"></span>'
+                        '미리보기 생성 중...</div>', unsafe_allow_html=True,
+                    )
                     clear_from_upload_change("source")
                     root = Path(os.environ.get("VACE_WORKSPACE", "artifacts/jaeeun/vace-ui")).resolve()
                     st.session_state.job_workspace = str(root / uuid.uuid4().hex)
@@ -381,30 +400,27 @@ with st.container(key="studio_body"):
                             st.session_state.personal_color_result = {"label": result.label, "label_ko": result.label_ko, "confidence": result.confidence, "source": "AI 분석"}
                         else:
                             st.session_state.personal_color_result = {"label": "summer_cool", "label_ko": COLOR_LABELS["summer_cool"], "confidence": None, "source": "기본 추천"}
-                        st.session_state.phase = "color"
                         st.session_state.edit_type = "custom"
+                        create_anchor_candidates()
+                        st.session_state.phase = "color"
                         st.rerun()
-                    except (RuntimeError, ValueError, OSError) as error:
-                        st.error(str(error))
+                    except (RuntimeError, ValueError, OSError, ImportError, subprocess.CalledProcessError) as error:
+                        st.session_state.upload_error = str(error)
+                        st.session_state.phase = "upload"
+                        st.rerun()
             else:
                 result = st.session_state.personal_color_result
                 st.markdown('<div class="section-title color-section-title"><span class="section-number">02</span>Color</div>', unsafe_allow_html=True)
                 confidence = f'<div class="confidence">Confidence <b>{result["confidence"]:.0%}</b></div>' if result.get("confidence") is not None else ''
-                st.markdown(f'<div class="color-result"><strong>당신의 퍼스널컬러는 {result["label_ko"]}입니다.</strong><div class="confidence">{result.get("source", "분석 결과")}</div>{confidence}</div>', unsafe_allow_html=True)
+                source_label = '<div class="confidence">AI 분석</div>' if result.get("source") == "AI 분석" else ''
+                st.markdown(f'<div class="color-result"><strong>당신의 퍼스널컬러는 {result["label_ko"]}입니다.</strong>{source_label}{confidence}</div>', unsafe_allow_html=True)
                 st.caption("요청한 스타일과 추천 컬러를 비교해보세요.")
                 for color_index, (color_id, _, prompt_color) in enumerate((("requested", "요청한 스타일", ""),) + active_palette()):
                     english, korean, hex_color = color_meta(color_id)
-                    label = "요청한 스타일" if color_id == "requested" else f"추천 {color_index}.  {korean}  ·  {english}"
+                    label = korean if color_id == "requested" else f"추천 {color_index}.  {korean}  ·  {english}"
                     if st.button(label, key=f"color_{color_id}", use_container_width=True):
                         st.session_state.selected_anchor = color_id
                         st.session_state.selected_preview = color_id
-                        if not st.session_state.vace_candidates:
-                            try:
-                                with st.spinner("요청한 스타일과 추천 컬러 미리보기를 생성하는 중..."):
-                                    create_anchor_candidates()
-                                st.rerun()
-                            except (RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as error:
-                                st.error(str(error))
 
     with main:
         if st.session_state.phase == "upload":
