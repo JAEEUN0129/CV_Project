@@ -1,0 +1,53 @@
+# Flux anchor 3개를 보여준 뒤 선택한 anchor로 Wan/VACE 영상을 생성하는 Streamlit 앱.
+# 아래 vessl-dataset 이름은 실제 Dataset 이름으로 바꾼다.
+name: vace-personal-color-ui
+description: 퍼스널컬러 기반 Flux anchor 선택과 Wan VACE 헤어 영상 생성
+
+image: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+resources:
+  preset: gpu-l4-small
+
+import:
+  /root/code: git://github.com/JAEEUN0129/CV_Project
+  /root/vace-model: vessl-dataset://vace-wan21-1.3b
+  /root/personal-color: vessl-dataset://personal-color-classifier
+
+ports:
+  - name: streamlit
+    type: http
+    port: 8501
+
+env:
+  FLUX_PYTHON: /root/flux-env/bin/python
+  FLUX_WORKER: /root/code/jaeeun/vace/flux_worker.py
+  VACE_REPO: /root/VACE
+  VACE_MODEL_DIR: /root/vace-model
+  VACE_WORKSPACE: /root/vace-workspace
+  PERSONAL_COLOR_CHECKPOINT: /root/personal-color/personal_color_korean_tuned_v2.pt
+
+run:
+  - workdir: /root
+    command: |
+      set -euxo pipefail
+
+      apt-get update
+      apt-get install -y git ffmpeg libgl1 libglib2.0-0
+
+      git clone --depth 1 https://github.com/ali-vilab/VACE.git /root/VACE
+      git -C /root/code checkout jaeeun
+      cd /root/code
+      pip install -r jaeeun/requirements-server.txt
+      pip install -U packaging ninja
+      pip install -r /root/VACE/requirements.txt
+      pip install -r /root/VACE/requirements/annotator.txt
+      pip install "wan@git+https://github.com/Wan-Video/Wan2.1"
+
+      python -m venv /root/flux-env
+      /root/flux-env/bin/pip install -U pip
+      /root/flux-env/bin/pip install -r /root/code/jaeeun/requirements-flux.txt
+
+      streamlit run /root/code/jaeeun/vace_app.py \
+        --server.address 0.0.0.0 \
+        --server.port 8501 \
+        --server.headless true

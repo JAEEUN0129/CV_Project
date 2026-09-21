@@ -1,0 +1,5 @@
+# Local UI environment. For GPU servers, provision CUDA torch separately
+# and install requirements-server.txt instead.
+-r requirements-server.txt
+torch>=2.5,<3
+torchvision>=0.20,<1

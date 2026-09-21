@@ -1,0 +1,60 @@
+"""Interchangeable manual and external-FLUX anchor providers."""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Protocol
+
+
+class AnchorEditor(Protocol):
+    def create(
+        self, source: Path, reference: Path | None, mask: Path | None, prompt: str, output: Path
+    ) -> Path: ...
+
+
+@dataclass(frozen=True)
+class ManualAnchorEditor:
+    anchor: Path
+
+    def create(
+        self, source: Path, reference: Path | None, mask: Path | None, prompt: str, output: Path
+    ) -> Path:
+        if not self.anchor.is_file():
+            raise FileNotFoundError(f"Manual anchor not found: {self.anchor}")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(self.anchor, output)
+        return output
+
+
+@dataclass(frozen=True)
+class FluxAnchorEditor:
+    python: Path
+    worker: Path
+    cpu_offload: bool = True
+    edit_mode: str = "masked"
+
+    def create(
+        self, source: Path, reference: Path | None, mask: Path | None, prompt: str, output: Path
+    ) -> Path:
+        if self.edit_mode == "masked" and mask is None:
+            raise ValueError("FLUX anchor generation requires an anchor edit mask")
+        command = [
+            str(self.python), str(self.worker),
+            "--source", str(source),
+            "--edit-mode", self.edit_mode,
+            "--prompt", prompt,
+            "--output", str(output),
+        ]
+        if reference is not None:
+            command.extend(["--reference", str(reference)])
+        if mask is not None:
+            command.extend(["--mask", str(mask)])
+        if self.cpu_offload:
+            command.append("--cpu-offload")
+        subprocess.run(command, check=True)
+        if not output.is_file():
+            raise RuntimeError(f"FLUX worker did not create {output}")
+        return output
