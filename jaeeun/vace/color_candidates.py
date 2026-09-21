@@ -153,14 +153,26 @@ def recolor_requested(image: Path, mask, color: str, output: Path) -> Path:
     rgb = np.array([int(color[i:i + 2], 16) for i in (1, 3, 5)], dtype=np.float32) / 255
     target = cv2.cvtColor(rgb.reshape(1, 1, 3), cv2.COLOR_RGB2LAB)[0, 0]
     edited = lab.copy()
-    # Shift average lightness to the chosen colour while retaining strand shading.
-    edited[..., 0] = np.clip(lab[..., 0] + target[0] - np.median(lab[..., 0][mask]), 0, 100)
-    edited[..., 1:] = target[1:]
+    # Preserve dark roots/shadows instead of lifting every pixel by one offset.
+    lightness = lab[..., 0]
+    median = max(float(np.median(lightness[mask])), 1.0)
+    target_mid = float(target[0])
+    shadow = lightness * target_mid / median
+    highlight = target_mid + (lightness - median) * min(1.0, (100 - target_mid) / max(100 - median, 1))
+    edited[..., 0] = np.clip(np.where(lightness <= median, shadow, highlight), 0, 100)
+    # Specular reflections are less saturated than the body of the hair.
+    # Retain small local colour variations rather than painting constant a/b.
+    highlight_weight = np.clip((lightness - median) / max(100 - median, 1), 0, 1)
+    shadow_weight = np.clip(lightness / max(median * .45, 1), 0, 1)
+    chroma_weight = (1 - .80 * highlight_weight) * shadow_weight
+    local_chroma = lab[..., 1:] - np.median(lab[..., 1:][mask], axis=0)
+    edited[..., 1:] = (target[1:] + np.clip(local_chroma, -8, 8) * .15) * chroma_weight[..., None]
     rgb_edit = cv2.cvtColor(edited, cv2.COLOR_LAB2RGB)
     # Feather inward only, so skin/background pixels never change.
-    # A strong interior blend prevents narrow hair tips from retaining the old
-    # colour merely because blur averages their mask with the background.
-    alpha = np.maximum(cv2.GaussianBlur(mask.astype(np.float32), (0, 0), 1.2), 0.85) * mask
+    # Blend inward at the contour while still colouring thin strands. Outside
+    # pixels stay exact; no colour is blurred into skin or the background.
+    distance = cv2.distanceTransform(mask.astype(np.uint8), cv2.DIST_L2, 5)
+    alpha = (.60 + .40 * (1 - np.exp(-distance / 1.5))) * mask
     blended = source * (1 - alpha[..., None]) + rgb_edit * 255 * alpha[..., None]
     result = source.copy()
     result[mask] = np.clip(np.rint(blended[mask]), 0, 255).astype(np.uint8)

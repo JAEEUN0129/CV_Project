@@ -17,6 +17,22 @@ from jaeeun.vace.color_candidates import merge_detail_mask
 
 
 class HairCandidatesTest(unittest.TestCase):
+    def test_recolor_preserves_shadows_and_desaturates_reflections(self):
+        import cv2
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pixels = np.full((80, 160, 3), 110, dtype=np.uint8)
+            pixels[:, :40] = 4
+            pixels[:, 120:] = 245
+            source = root / "source.png"
+            Image.fromarray(pixels).save(source)
+            recolor_requested(source, np.ones((80, 160), dtype=bool), "#9A6F78", root / "color.png")
+            result = np.array(Image.open(root / "color.png"))
+            lab = cv2.cvtColor(result.astype(np.float32) / 255, cv2.COLOR_RGB2LAB)
+            self.assertLess(lab[40, 20, 0], 5)
+            self.assertLess(lab[40, 80, 0], lab[40, 140, 0])
+            self.assertLess(np.linalg.norm(lab[40, 140, 1:]), np.linalg.norm(lab[40, 80, 1:]) * .5)
+
     def test_original_hair_tips_are_editable_but_not_added_to_recolor_mask(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
